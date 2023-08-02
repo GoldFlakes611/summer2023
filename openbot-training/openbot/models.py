@@ -3,6 +3,7 @@
 from tkinter import W
 import tensorflow as tf
 import numpy as np
+#from . import vit as vt
 
 """
 Constructors for standard MLPs and CNNs
@@ -232,13 +233,16 @@ def simple_cnn(img_width, img_height, bn=False):
     )
 
     # output MLP
+    #y = tf.keras.layers.MaxPool2D((9,9),(9,9),"valid")
+    #cnn.input = y
     x = tf.keras.layers.Dense(16, activation="relu")(cnn.output)
     x = tf.keras.layers.Dropout(0.5)(x)
     x = tf.keras.layers.Dense(2, activation="linear", dtype='float32')(x)
 
     # our final model will accept images on the CNN input, 
+    cnn.summary()
     # outputting two values (throttle/steer ctrl)
-    model = tf.keras.Model(name="behavior_clone", inputs=cnn.input, outputs=x)
+    model = tf.keras.Model(name="behavior_clone", inputs=cnn.inputs, outputs=x)
 
     return model
 
@@ -381,13 +385,19 @@ def vgg_19(img_width : int, img_height : int, bn : bool = False) -> tf.keras.Mod
     return model
 
 def resnet(img_width : int, img_height : int, bn : bool = False) -> tf.keras.Model:
+    x = tf.keras.Input(shape=(224,224,3))
+    y = tf.keras.layers.AveragePooling2D((2,2),(2,2),"valid")(x)
     base_model = tf.keras.applications.resnet50.ResNet50(
-        include_top=True,
+        include_top=False,
+        input_shape=(112,112,3),
         weights=None,
         classifier_activation=None,
     )
-    x = tf.keras.layers.Dense(2, activation='linear')(base_model.output)
-    model = tf.keras.Model(name='resnet', inputs=base_model.input, outputs=x)
+    z = base_model(y)
+    zf = tf.keras.layers.GlobalAveragePooling2D()(z)
+    zf2 = tf.keras.layers.Dense(1000, activation="linear")(zf)
+    out = tf.keras.layers.Dense(2, activation='linear')(zf2)
+    model = tf.keras.Model(name='resnet', inputs=x, outputs=out)
     return model
 
 def vgg16_bn(img_width : int, img_height : int, bn : bool = False) -> tf.keras.Model:
@@ -430,3 +440,6 @@ def alexnet(img_width : int, img_height : int, bn : bool = False) -> tf.keras.Mo
             tf.keras.layers.Dense(2, activation='linear'),
     ])
     return model
+
+#def vit(img_width : int, img_height : int, bn : bool = False) -> tf.keras.Model:
+    #return vt.create_VisionTransformer(2)

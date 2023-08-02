@@ -167,6 +167,7 @@ def process_data(tr: Training):
 def load_tfrecord(tr: Training, verbose=0):
     def process_train_sample(features):
         image = features["image"]
+        print(image.shape)
         label = [features["throttle"], features["steer"]]
         image = data_augmentation.augment_img(image)
         if tr.hyperparameters.TRANS_AUG and not tr.hyperparameters.IOS:
@@ -303,8 +304,10 @@ def setup_training(tr: Training, callback: tf.keras.callbacks.Callback, dataset_
     model: tf.keras.Model
     if tr.hyperparameters.USE_LAST:
         print("Loading last model . . .")
+        chkPts = os.listdir(tr.checkpoint_path)
+        chkPts.sort()
         model = tf.keras.models.load_model(
-            model_path,
+            os.path.join(tr.checkpoint_path,chkPts[-1]),
             custom_objects=tr.custom_objects,
             compile=False,
         )
@@ -334,6 +337,9 @@ def setup_training(tr: Training, callback: tf.keras.callbacks.Callback, dataset_
         print(model.summary())
 
     tr.log_path = os.path.join("models", tr.model_name, "logs")
+    if not os.path.exists(tr.log_path):
+        os.mkdir(tr.log_path)
+    
     if verbose:
         print(tr.model_name)
 
@@ -501,7 +507,7 @@ def start_train(params: Hyperparameters, verbose : bool = False, dataset_name : 
         verbose=1,
         callbacks=callback_list
     )
-
+    model_path = os.path.join("models", tr.model_name, "model")
     if tr.hyperparameters.WANDB:
         wandb.save(model_path)
         wandb.finish()

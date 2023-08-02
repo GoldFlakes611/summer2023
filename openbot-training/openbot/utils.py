@@ -81,6 +81,10 @@ def show_test_batch(image_batch, label_batch, pred_batch, fig_num=1):
 def generate_tflite(path, filename):
     converter = tf.lite.TFLiteConverter.from_saved_model(os.path.join(path, filename))
     converter.optimizations = [tf.lite.Optimize.DEFAULT]
+    converter.target_spec.supported_ops = [
+        tf.lite.OpsSet.TFLITE_BUILTINS,
+        tf.lite.OpsSet.SELECT_TF_OPS
+    ]
     tflite_model = converter.convert()
     return tflite_model
 

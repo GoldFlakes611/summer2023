@@ -77,7 +77,7 @@ def convert_dataset(data_dir, tfrecords_dir, tfrecords_name, redo_matching=True,
 
     # load the datasets avaible.
     datasets = [
-        d for d in os.listdir(data_dir) if os.path.isdir(os.path.join(data_dir, d))
+        d for d in os.listdir(data_dir) if os.path.isdir(os.path.join(data_dir, d)) and "tfrecords" not in d
     ]
     print("Number of Datasets Available: ", len(datasets))
 
