@@ -58,3 +58,7 @@ logdir/
 
 Icon\r
 **/Icon\r
+
+
+models/
+.ipynb_checkpoints/
