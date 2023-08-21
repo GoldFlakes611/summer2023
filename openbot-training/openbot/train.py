@@ -179,9 +179,10 @@ def load_tfrecord(tr: Training, verbose=0):
         print(image)
         return image, label
     
-    full_dataset = tf.data.TFRecordDataset(tr.train_data_dir, num_parallel_reads=AUTOTUNE)
+    train_dataset = tf.data.TFRecordDataset(tr.train_data_dir, num_parallel_reads=AUTOTUNE)
+    test_dataset = tf.data.TFRecordDataset(tr.test_data_dir, num_parallel_reads=AUTOTUNE)
 
-    for image, label in full_dataset.take(1).map(tfrecord_utils.parse_tfrecord_fn).map(process_train_sample):
+    for image, label in train_dataset.take(1).map(tfrecord_utils.parse_tfrecord_fn).map(process_train_sample):
         shape = image.numpy().shape
         tr.NETWORK_IMG_HEIGHT = shape[0]
         tr.NETWORK_IMG_WIDTH = shape[1]
@@ -190,27 +191,24 @@ def load_tfrecord(tr: Training, verbose=0):
 
     # Obtains the total number of records from .tfrecords file
     # https://stackoverflow.com/questions/40472139/obtaining-total-number-of-records-from-tfrecords-file-in-tensorflow
-    dataset_size = sum(1 for _ in full_dataset)
-    tr.image_count_train = int(dataset_size * tr.split)
+    tr.image_count_train = sum(1 for _ in train_dataset)
     print("Number of training instances: ", tr.image_count_train)
 
-    tr.image_count_test = int(dataset_size * (1 - tr.split))
+    tr.image_count_test = sum(1 for _ in test_dataset)
     print("Number of test instances: ", tr.image_count_test)
 
-    full_dataset = full_dataset.shuffle(dataset_size, reshuffle_each_iteration=False)
-
     # Prepare train and test datasets for training
-    tr.train_ds = (full_dataset
-        .take(tr.image_count_train)
+    tr.train_ds = (train_dataset
         .shuffle(tr.image_count_train * 30)
         .map(tfrecord_utils.parse_tfrecord_fn, num_parallel_calls=AUTOTUNE)
         .map(process_train_sample, num_parallel_calls=AUTOTUNE)
         .batch(tr.hyperparameters.TRAIN_BATCH_SIZE)
         .prefetch(AUTOTUNE)
     )
-    tr.test_ds = (full_dataset
-        .skip(tr.image_count_train)
+
+    tr.test_ds = (test_dataset
         .shuffle(tr.image_count_test * 30)
+        .take(1280)
         .map(tfrecord_utils.parse_tfrecord_fn, num_parallel_calls=AUTOTUNE)
         .map(process_train_sample, num_parallel_calls=AUTOTUNE)
         .batch(tr.hyperparameters.TEST_BATCH_SIZE)
