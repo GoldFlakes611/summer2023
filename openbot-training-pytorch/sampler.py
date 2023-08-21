@@ -1,14 +1,11 @@
 import multiprocessing as mp
+import pathlib
 
 import cv2
 import numpy as np
+from openbot import list_dirs, load_labels
 from scipy.stats import truncnorm
 from torch.utils.data import Dataset
-from torchdata.datapipes.iter import FileOpener
-
-
-def preprocess_record(sample):
-    return sample["steer"].item(), sample["throttle"].item(), sample["image"][0]
 
 
 def process_data(sample):
@@ -26,14 +23,7 @@ def process_image(img, aug_pixel, rangeY=(58, 282), rangeX=(208, 432), endShape=
 
 
 class ImageSampler(Dataset):
-    """
-    This is the Image Sampler for Jetson Data
-    The default sampler settings:
-        1. User fisheye transform
-        2. Transform to 160x90 image
-        3. Augment the steering angle with truncnorm distribution
-    """
-    def __init__(self, tfrecords):
+    def __init__(self, dataset_path):
         self.datasets = []
         self.size = 0
         self.imgs = []
@@ -44,8 +34,43 @@ class ImageSampler(Dataset):
         max_aug = 208
         self.max_steering_aug = max_aug / self.steering_factor
         self.scale = self.max_steering_aug / 2
+        self.add_datasets(dataset_path)
 
-        self.add_datasets(tfrecords)
+    def load_sample_tfrecord(self, dataset_path):
+        from torchdata.datapipes.iter import FileOpener
+        return [
+            (sample["steer"].item(), sample["throttle"].item(), sample["image"][0]) 
+            for sample in FileOpener(dataset_path, mode="b").load_from_tfrecord()
+        ]
+
+    def load_sample_openbot(self, dataset_path):
+        samples = []
+        for image_path, ctrl_cmd in load_labels(dataset_path, list_dirs(dataset_path)).items():
+            try:
+                with open(image_path, "rb") as f:
+                    image = f.read()
+                samples.append((
+                    float(ctrl_cmd[1]) / 255.0,  # steer
+                    float(ctrl_cmd[0]) / 255.0,  # throttle
+                    image,  # image
+                ))
+            except FileNotFoundError:
+                print(f"File not found: {image_path}")
+
+        return samples
+
+    def load_sample(self, dataset_paths):
+        # XXX: Some compatibility with old tfrecord datasets
+        # This is not that efficient, so eventually we will  
+        # put everything into a datapipe.
+        samples = []
+        for dataset_path in dataset_paths:
+            if not pathlib.Path(dataset_path).is_dir():
+                samples.extend(self.load_sample_tfrecord([dataset_path]))
+            else:
+                samples.extend(self.load_sample_openbot(dataset_path))
+
+        return samples
 
     def add_datasets(self, tfrecords):
         """adds the datasets found in directories: dirs to each of their corresponding member variables
@@ -55,9 +80,9 @@ class ImageSampler(Dataset):
         dirs : string/list of strings
             Directories where dataset is stored"""
         self.datasets.extend(tfrecords)
-        dataset = list(FileOpener(tfrecords, mode="b").load_from_tfrecord())
+        dataset = self.load_sample(tfrecords)
         with mp.Pool() as pool:
-            data = pool.map(process_data, map(preprocess_record, dataset))
+            data = pool.map(process_data, dataset)
 
         self.size += len(data)
         # Transpose the data
