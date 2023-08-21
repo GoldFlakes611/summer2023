@@ -5,7 +5,7 @@ import cv2
 import numpy as np
 from openbot import list_dirs, load_labels
 from scipy.stats import truncnorm
-from torch.utils.data import Dataset
+from torch.utils.data import Dataset, random_split
 
 
 def process_data(sample):
@@ -34,7 +34,7 @@ class ImageSampler(Dataset):
         max_aug = 208
         self.max_steering_aug = max_aug / self.steering_factor
         self.scale = self.max_steering_aug / 2
-        self.add_datasets(dataset_path)
+        self.prepare_datasets(dataset_path)
 
     def load_sample_tfrecord(self, dataset_path):
         from torchdata.datapipes.iter import FileOpener
@@ -72,7 +72,7 @@ class ImageSampler(Dataset):
 
         return samples
 
-    def add_datasets(self, tfrecords):
+    def prepare_datasets(self, tfrecords):
         """adds the datasets found in directories: dirs to each of their corresponding member variables
 
         Parameters:
@@ -90,8 +90,9 @@ class ImageSampler(Dataset):
         self.imgs.extend(imgs)
         self.steering.extend(steering)
         self.throttle.extend(throttle)
+        self._prepare()
 
-    def prepare(self):
+    def _prepare(self):
         """
         Run this function before sampling, and after adding all the datasets
         """
@@ -125,3 +126,29 @@ class ImageSampler(Dataset):
         throttle = self.throttle[index]
 
         return *self.process(img, steering, throttle),
+
+
+def load_full_dataset(dataset_paths, train_test_split=0.8):
+    train_datasets = []
+    test_datasets = []
+    for dataset_path in dataset_paths:
+        dataset_path = pathlib.Path(dataset_path)
+        if not dataset_path.is_dir():
+            train_datasets.append(dataset_path)
+        else:
+            if (dataset_path / "train").is_dir():
+                train_datasets.append(dataset_path / "train")
+            if (dataset_path / "tfrecords" / "train.tfrec").exists():
+                train_datasets.append(dataset_path / "tfrecords" / "train.tfrec")
+            if (dataset_path / "test").is_dir():
+                test_datasets.append(dataset_path / "test")
+
+    trainset = ImageSampler(train_datasets)
+    if test_datasets:
+        testset = ImageSampler(test_datasets)
+    else:
+        train_size = int(len(trainset) * train_test_split)
+        trainset, testset = random_split(trainset, [train_size, len(trainset) - train_size])
+
+    print(f"Training: {len(trainset)}, Testing {len(testset)}")
+    return trainset, testset

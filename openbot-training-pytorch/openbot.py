@@ -345,40 +345,34 @@ def get_max_ctrl(frame_list):
 
 ####### include from tfrecord.py #######
 
-def load_labels(data_dir, datasets, ios=False):
+def load_labels(data_dir, dataset_folders, ios=False):
     """Returns a dictionary of matched images path[string] and actions tuple (throttle[int], steer[int])."""
     corpus = []
-    for dataset in datasets:
-        dataset_folders = [
-            f
-            for f in os.listdir(os.path.join(data_dir, dataset))
-            if not f.startswith(".")
-        ]
-        for folder in dataset_folders:
-            if not ios:
-                sensor_data_dir = os.path.join(data_dir, dataset, folder, "sensor_data")
-            else:
-                sensor_data_dir = os.path.join(data_dir, dataset, folder)
-            with open(
-                os.path.join(sensor_data_dir, "matched_frame_ctrl_cmd_processed.txt")
-            ) as f_input:
-                header = f_input.readline()  # discard header
-                data = f_input.read()
-                lines = (
-                    data.replace(",", " ")
-                    .replace("\\", "/")
-                    .replace("\r", "")
-                    .replace("\t", " ")
-                    .split("\n")
-                )
-                data = [
-                    [v.strip() for v in line.split(" ") if v.strip() != ""]
-                    for line in lines
-                    if len(line) > 0 and line[0] != "#"
-                ]
-                # Tuples containing id: framepath and label: throttle, steer
-                data = [(l[1], l[2:4]) for l in data if len(l) > 1]
-                corpus.extend(data)
+    for folder in dataset_folders:
+        if not ios:
+            sensor_data_dir = os.path.join(data_dir, folder, "sensor_data")
+        else:
+            sensor_data_dir = os.path.join(data_dir, folder)
+        with open(
+            os.path.join(sensor_data_dir, "matched_frame_ctrl_cmd_processed.txt")
+        ) as f_input:
+            header = f_input.readline()  # discard header
+            data = f_input.read()
+            lines = (
+                data.replace(",", " ")
+                .replace("\\", "/")
+                .replace("\r", "")
+                .replace("\t", " ")
+                .split("\n")
+            )
+            data = [
+                [v.strip() for v in line.split(" ") if v.strip() != ""]
+                for line in lines
+                if len(line) > 0 and line[0] != "#"
+            ]
+            # Tuples containing id: framepath and label: throttle, steer
+            data = [(l[1], l[2:4]) for l in data if len(l) > 1]
+            corpus.extend(data)
     return dict(corpus)
 
 ###### end tfrecord.py ######
