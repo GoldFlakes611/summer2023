@@ -1,3 +1,4 @@
+import argparse
 import sys
 import tempfile
 
@@ -7,10 +8,12 @@ from onnx_tf.backend import prepare
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 3:
-        print(f"{sys.argv[0]} input_onnx output_tflite")
+    argparser = argparse.ArgumentParser(description='Convert ONNX to TFLite')
+    argparser.add_argument('input_onnx', type=str, help='Path to the ONNX model')
+    argparser.add_argument('output_tflite', type=str, help='Path to the TFLite model')
+    args = argparser.parse_args()
 
-    onnx_model = onnx.load(sys.argv[1])
+    onnx_model = onnx.load(args.input_onnx)
     tf_rep = prepare(onnx_model)
 
     with tempfile.TemporaryDirectory() as tmp:
@@ -20,5 +23,5 @@ if __name__ == "__main__":
         tflite_model = converter.convert()
 
     # Save the model
-    with open(sys.argv[2], 'wb') as f:
+    with open(args.output_tflite, 'wb') as f:
         f.write(tflite_model)
