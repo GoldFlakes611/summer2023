@@ -5,16 +5,16 @@ Before running the script, make sure the dataset is with correct structure. We a
 ```
 mydataset
 ├── train
-│  ├── <dataset_folder_1>
-│  │   ├── images
-│  │   │   ├── xxxx_preview.jpeg
-│  │   │   └── [* more images *]
-│  │   └── sensor_data
-│  │       ├── ctrlLog.txt
-│  │       ├── indicatorLog.txt
-│  │       ├── inferenceTime.txt
-│  │       └── rgbFrames.txt
-│  └── [* more dataset_folder *]
+│   ├── <dataset_folder_1>
+│   │   ├── images
+│   │   │   ├── xxxx_preview.jpeg
+│   │   │   └── [* more images *]
+│   │   └── sensor_data
+│   │       ├── ctrlLog.txt
+│   │       ├── indicatorLog.txt
+│   │       ├── inferenceTime.txt
+│   │       └── rgbFrames.txt
+│   └── [* more dataset_folder *]
 └── test
     └── [* same structure as train *]
 ```
