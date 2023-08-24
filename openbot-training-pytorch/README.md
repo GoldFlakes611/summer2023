@@ -1,5 +1,22 @@
 # Training Pipeline using PyTorch
 
+## Dependencies
+
+Explicit dependencies:
+
+- ipykernel
+- ipywidgets
+- matplotlib
+- numpy
+- opencv-python
+- pytorch
+- scipy
+- torchdata (optioanl for tfrecord support)
+- torchvision
+- tqdm
+
+## Training
+
 Before running the script, make sure the dataset is with correct structure. We assume the dataset is in the `mydataset` folder. The structure of the dataset should be like this:
 
 ```
