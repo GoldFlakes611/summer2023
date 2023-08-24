@@ -6,6 +6,7 @@
 #==============================================================
 import torch
 from torch import nn
+from torchvision.models import ViT_B_16_Weights, vit_b_16
 
 
 class EdgeKernel(nn.Module):
@@ -147,8 +148,40 @@ class ModelHubBase(nn.Module):
         return cls_instance
 
 
+class ViT(nn.Module):
+    NAME = "vit"
+
+    def __init__(self):
+        super().__init__()
+        self.model = vit_b_16(weights=ViT_B_16_Weights.DEFAULT)
+        self.model.heads = nn.Sequential(
+            nn.Linear(768, 768),
+            nn.ReLU(),
+            nn.Linear(768, 2)
+        )
+
+    def forward(self, x):
+        # Reshape and permute the input tensor
+        x = self.model._process_input(x)
+        n = x.shape[0]
+
+        # Expand the class token to the full batch
+        batch_class_token = self.model.class_token.expand(n, -1, -1)
+        x = torch.cat([batch_class_token, x], dim=1)
+
+        x = self.model.encoder(x)
+
+        # Classifier "token" as used by standard language architectures
+        x = x[:, 0]
+
+        x = self.model.heads(x)
+
+        return x
+
+
 models = {
     "cnn": CNN,
+    "vit": ViT,
 }
 
 
