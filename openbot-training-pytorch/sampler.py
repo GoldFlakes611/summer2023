@@ -16,7 +16,7 @@ def process_data(sample):
     return steer, throttle, image
 
 
-def process_image(img, aug_pixel, rangeY=(58, 282), rangeX=(208, 432), endShape=(224, 224)):
+def process_image(img, aug_pixel, rangeY=(136, 360), rangeX=(208, 432), endShape=(224, 224)):
     new_rangeX = (rangeX[0] + aug_pixel, rangeX[1] + aug_pixel)
     new_img = img[rangeY[0]:rangeY[1], new_rangeX[0]:new_rangeX[1]]
     return cv2.resize(new_img, endShape)
