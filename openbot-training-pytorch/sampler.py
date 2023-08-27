@@ -15,7 +15,7 @@ def process_data(sample):
     image = cv2.cvtColor(image , cv2.COLOR_BGR2RGB)
     return steer, throttle, image
 
-
+#change the value of rangeY to(58,282) for center crop and (136,360) for bottom crop
 def process_image(img, aug_pixel, rangeY=(58, 282), rangeX=(208, 432), endShape=(224, 224)):
     new_rangeX = (rangeX[0] + aug_pixel, rangeX[1] + aug_pixel)
     new_img = img[rangeY[0]:rangeY[1], new_rangeX[0]:new_rangeX[1]]
