@@ -8,6 +8,19 @@ import torch
 from torch import nn
 from torchvision.models import ViT_B_16_Weights, vit_b_16
 
+if torch.cuda.is_available():
+    device = torch.device("cuda")
+else:
+    device = torch.device('cpu')
+
+class CropKernel(nn.Module):
+    def __init__(self, channels, horizon):
+        super().__init__()
+        self.crop_matrix = torch.cat((torch.zeros(channels,224-horizon,224,device=device), torch.ones(channels,horizon,224,device=device)),1)
+
+    def forward(self, X):
+        Y = X*self.crop_matrix
+        return Y
 
 class EdgeKernel(nn.Module):
     def __init__(self, channels=3, kernel=3) -> None:
@@ -101,11 +114,44 @@ class CNN(nn.Module):
         return output
 
 
+class Yolo(nn.Module):
+    NAME = "yolo"
+    def __init__(self, in_channels=3, edge_filter=True):
+        from ultralytics import YOLO
+        super().__init__()
+        #load yolo
+        self.yolo = YOLO("yolo_pyt.pt").model
+        self.yolo.model = nn.Sequential(*list(self.yolo.model.children())[:-1])
+        for i, param in enumerate(self.yolo.named_parameters()):
+            #if i < 135:
+            param[1].requires_grad = False
+
+        #make mlp at bottom
+        self.mlp = nn.Sequential(
+            nn.Flatten(),
+            nn.LazyLinear(512),
+            nn.ELU(),
+            nn.Dropout(0.5),
+            nn.LazyLinear(128),
+            nn.ELU(),
+            nn.Dropout(0.5),
+            nn.LazyLinear(32),
+            nn.ELU(),
+            nn.LazyLinear(2),
+        )
+
+    def forward(self, image):
+        x = self.yolo(image)
+        y = self.mlp(x)
+        return y
+
+
 class ModelHubBase(nn.Module):
     NAME = None
-    def __init__(self, edge_filter=True, old_model=False):
+    def __init__(self, edge_filter=True, old_model=False, crop_image=False):
         super().__init__()
         self.filter = EdgeKernel(3) if edge_filter else nn.Identity()
+        self.crop = CropKernel(3,90) if crop_image else nn.Identity()
         self.model = torch.hub.load('pytorch/vision:v0.10.0', self.NAME)
         if old_model:
             # This is for backward compatibility with already trained models
@@ -131,6 +177,7 @@ class ModelHubBase(nn.Module):
 
     def forward(self, x):
         x = self.filter(x)
+        x = self.crop(x)
         x = self.model(x)
         if self.NAME == "googlenet":  # Fix ouput of googlenet
             x = x[0]
@@ -182,6 +229,7 @@ class ViT(nn.Module):
 models = {
     "cnn": CNN,
     "vit": ViT,
+    "yolo":Yolo,
 }
 
 
