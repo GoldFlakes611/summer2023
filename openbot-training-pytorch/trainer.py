@@ -116,7 +116,7 @@ class Trainer:
             for i, (img, steering, throttle) in enumerate(sampler_train):
                 Y = torch.stack([steering, throttle], dim=1).type(torch.float32).to(device)
                 #Tensor Processing
-                X = img.to(device).permute(0, 3, 1, 2) / 256 #Starting dimensions [1,100,90,160] -> After permute [100, 1, 90, 160] (Pytorch Tensor format[Number, Channels, Height, Width])
+                X = img.to(device) / 256 #Starting dimensions [1,100,90,160] -> After permute [100, 1, 90, 160] (Pytorch Tensor format[Number, Channels, Height, Width])
 
                 #Using the model for inference
                 self.optim.zero_grad()
@@ -160,7 +160,7 @@ class Trainer:
 
             for j, (img, steering, throttle) in enumerate(sampler_test):
                 Y = torch.stack([steering, throttle], dim=1).type(torch.float32).to(device)
-                X = img.to(device).permute(0, 3, 1, 2) / 256
+                X = img.to(device) / 256
 
                 with torch.no_grad():
                     Y_pred = self.model(X)
