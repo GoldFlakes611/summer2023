@@ -42,9 +42,11 @@ Specifically, if there was no control signal event within some threshold (defaul
 the last control signal before the frame is used.
 """
 
+import functools
 import os
 import glob
 import re
+import multiprocessing as mp
 
 from klogs import kLogger
 TAG = "OPENBOT"
@@ -165,15 +167,14 @@ def associate_ios(control, img, max_offset):
     return matches, i_ts, thr, steer
 
 
-def match_frame_ctrl_cmd(data_dir : str, datasets : list, max_offset : int, train_or_test : str, redo_matching : bool = False, remove_zeros : bool = True, ios : bool = False) -> list:
+def match_frame_ctrl_cmd(datasets : list, max_offset : int, train_or_test : str, redo_matching : bool = False, remove_zeros : bool = True, ios : bool = False) -> list:
     '''
     Matches the control signals to frames.
     Specifically, if there was no control signal event within some threshold (default: 1ms),
     the last control signal before the frame is used.
 
     Args:
-        data_dir (str): path to data directory
-        datasets (list): list of datasets
+        datasets (str): path to dataset directory
         max_offset (int): maximum offset between control signal and frame
         train_or_test (str): train or test
         redo_matching (bool): redo matching
@@ -184,13 +185,32 @@ def match_frame_ctrl_cmd(data_dir : str, datasets : list, max_offset : int, trai
         list: list of tuples (frame, control signal)
     '''
 
-    frames = []
-    for dataset in datasets:
-        for folder in list_dirs(os.path.join(data_dir, dataset)):
-            session_dir = os.path.join(data_dir, dataset, folder)
-            frame_list = match_frame_session(session_dir, max_offset, train_or_test, redo_matching, remove_zeros, ios)
-            for timestamp in list(frame_list):
-                frames.append(frame_list[timestamp][0])
+    match_frame_session_wrap = functools.partial(
+        match_frame_session,
+        max_offset=max_offset,
+        train_or_test=train_or_test,
+        redo_matching=redo_matching,
+        remove_zeros=remove_zeros,
+        ios=ios,
+    )
+
+    session_dirs = [
+        os.path.join(data_dir, dataset, folder)
+        for data_dir in datasets
+        for dataset in list_dirs(data_dir)
+        for folder in list_dirs(os.path.join(data_dir, dataset))
+    ]
+
+    log.info(f"Datasets: {len(session_dirs)}")
+
+    with mp.Pool(min(mp.cpu_count(), len(session_dirs))) as pool:
+        frame_lists = pool.map(match_frame_session_wrap, session_dirs)
+
+    frames = [
+        frame_list[timestamp][0]
+        for frame_list in frame_lists
+        for timestamp in list(frame_list)
+    ]
     return frames
 
 
@@ -214,7 +234,7 @@ def match_frame_session(session_dir : str, max_offset : int, train_or_test : str
         img_path = os.path.join(session_dir, "images")
         log.info("Processing folder %s" % (session_dir))
         if not redo_matching and os.path.isfile(os.path.join(sensor_path, "matched_frame_ctrl.txt")):
-            log.info(" Frames and controls already matched.")
+            log.info("Frames and controls already matched.")
         else:
             # Match frames with control signals
             frame_list = read_file_list(os.path.join(sensor_path, "rgbFrames.txt"))
@@ -242,7 +262,7 @@ def match_frame_session(session_dir : str, max_offset : int, train_or_test : str
         img_path = os.path.join(session_dir, "images")
         log.info("Processing folder %s" % (session_dir))
         if not redo_matching and os.path.isfile(os.path.join(session_dir, "matched_frame_ctrl.txt")):
-            log.info(" Frames and controls already matched.")
+            log.info("Frames and controls already matched.")
         else:
             matches, imgs, thr, steer = associate_ios(control_path, img_path, max_offset)
             with open(os.path.join(session_dir, "matched_frame_ctrl.txt"), "w") as f:
@@ -262,7 +282,7 @@ def match_frame_session(session_dir : str, max_offset : int, train_or_test : str
     if not redo_matching and os.path.isfile(
         os.path.join(sensor_path, "matched_frame_ctrl_cmd.txt")
     ):
-        log.info(" Frames and commands already matched.")
+        log.info("Frames and commands already matched.")
     else:
         # Match frames and controls with indicator commands
         if not ios:
@@ -282,7 +302,7 @@ def match_frame_session(session_dir : str, max_offset : int, train_or_test : str
                         "%d,%d,%s,%s\n"
                         % (a, b - a, ",".join(frame_list[a]), ",".join(cmd_list[b]))
                     )
-            log.info(" Frames and commands matched.")
+            log.info("Frames and commands matched.")
         else:
             frame_list = read_file_list(os.path.join(session_dir, "matched_frame_ctrl.txt"))
             if len(frame_list) == 0:
@@ -296,14 +316,14 @@ def match_frame_session(session_dir : str, max_offset : int, train_or_test : str
                         "%s,%s,%s,%s\n"
                         % (key, frame_list[key][0], f"0,{key}", f"{frame_list[key][2]},{frame_list[key][3]},0")
                     )
-            log.info(" Frames and commands matched.")
+            log.info("Frames and commands matched.")
         # Set indicator signal to 0 for initial frames
 
     if not ios:
         if not redo_matching and os.path.isfile(
             os.path.join(sensor_path, "matched_frame_ctrl_cmd_processed.txt")
         ):
-            log.info(" Preprocessing already completed.")
+            log.info("Preprocessing already completed.")
         else:
             # Cleanup: Add path and remove frames where vehicle was stationary
             frame_list = read_file_list(
@@ -320,7 +340,7 @@ def match_frame_session(session_dir : str, max_offset : int, train_or_test : str
                     left = int(frame[3])
                     right = int(frame[4])
                     if remove_zeros and left == 0 and right == 0:
-                        log.debug(f" Removed timestamp: {timestamp}")
+                        log.debug(f"Removed timestamp: {timestamp}")
                         del frame
                     else:
                         if train_or_test == "train":
@@ -331,7 +351,7 @@ def match_frame_session(session_dir : str, max_offset : int, train_or_test : str
                         f.write(
                             "%s,%s,%d,%d,%d\n" % (timestamp, frame_name, left, right, cmd)
                         )
-            log.info(" Preprocessing completed.")
+            log.info("Preprocessing completed.")
 
         return read_file_list(
             os.path.join(sensor_path, "matched_frame_ctrl_cmd_processed.txt")
@@ -340,7 +360,7 @@ def match_frame_session(session_dir : str, max_offset : int, train_or_test : str
         if not redo_matching and os.path.isfile(
             os.path.join(session_dir, "matched_frame_ctrl_cmd_processed.txt")
         ):
-            log.info(" Preprocessing already completed.")
+            log.info("Preprocessing already completed.")
         else:
             # Cleanup: Add path and remove frames where vehicle was stationary
             frame_list = read_file_list(
@@ -355,7 +375,7 @@ def match_frame_session(session_dir : str, max_offset : int, train_or_test : str
                     left = float(int(frame[3]) * 2 / 255) - 1
                     right = float(int(frame[4]) * 2 / 255) - 1
                     if remove_zeros and left == 0 and right == 0:
-                        log.debug(f" Removed timestamp: {timestamp}")
+                        log.debug(f"Removed timestamp: {timestamp}")
                         del frame
                     else:
                         if train_or_test == "train":
