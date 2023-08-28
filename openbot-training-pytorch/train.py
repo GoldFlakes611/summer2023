@@ -4,27 +4,27 @@ Description: Train utility, can be used instead of Train.ipynb
 Date: 2023-08-28
 Date Modified: 2023-08-28
 '''
-import multiprocessing
-from klogs import kLogger
-TAG = "TRAIN"
-log = kLogger(TAG)
 import pathlib
 
-import numpy as np
 import torch
+from dataloader import FastDataLoader
+from klogs import kLogger
 from matplotlib import pyplot as plt
+from models import get_model
 from numpy import random
+from sampler import load_full_dataset
 from scipy import signal
 from torch.optim import Adam
-from torch.utils.data import DataLoader
+from trainer import Trainer
+
 import wandb
 
-from models import get_model
-from sampler import load_full_dataset
-from trainer import Trainer
+TAG = "TRAIN"
+log = kLogger(TAG)
 
 if torch.cuda.is_available():
     device = torch.device("cuda")
+
 
 def visualize_dataset(trainset : torch.utils.data.Dataset) -> None:
     '''
@@ -127,8 +127,8 @@ def train(model_name : str, bs : int = 256, epochs : int = 1000, lr : float = 1e
 
     if trainer.i < trainer.epochs:
         try:
-            sampler_train = DataLoader(trainset, batch_size=bs, shuffle=True, num_workers=multiprocessing.cpu_count())
-            sampler_test = DataLoader(testset, batch_size=bs, shuffle=True, num_workers=multiprocessing.cpu_count())
+            sampler_train = FastDataLoader(trainset, batch_size=bs, shuffle=True, num_workers=4)
+            sampler_test = FastDataLoader(testset, batch_size=bs, shuffle=True, num_workers=4)
             trainer.train(sampler_train, sampler_test)
         finally:
             # Move the model to CPU

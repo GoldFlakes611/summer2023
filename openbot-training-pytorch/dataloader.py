@@ -23,6 +23,8 @@ class FastDataLoader(torch.utils.data.dataloader.DataLoader):
     https://github.com/pytorch/pytorch/issues/15849
     """
     def __init__(self, *args, **kwargs):
+        kwargs["multiprocessing_context"] = "spawn"
+
         super().__init__(*args, **kwargs)
         object.__setattr__(self, 'batch_sampler', _RepeatSampler(self.batch_sampler))
         self.iterator = super().__iter__()
