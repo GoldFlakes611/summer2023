@@ -198,7 +198,7 @@ class ImageSampler(Dataset):
         aug = np.floor(diff * self.steering_factor).astype('int32')
         steering = r  # The pixel to angle conversion is approximate
 
-        img = self.process_image(img.to(device), aug)
+        img = self.process_image(img, aug)
         return img, steering, throttle
 
     def __len__(self):
