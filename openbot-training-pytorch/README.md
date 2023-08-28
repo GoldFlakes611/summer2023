@@ -15,6 +15,8 @@ Explicit dependencies:
 - torchvision
 - tqdm
 - ultralytics(optional for using yolo)
+- wandb
+
 ## Training
 
 Before running the script, make sure the dataset is with correct structure. We assume the dataset is in the `mydataset` folder. The structure of the dataset should be like this:
