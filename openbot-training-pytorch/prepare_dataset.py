@@ -23,7 +23,7 @@ def process_data(data_dir : str) -> None:
     # Initially filter and sort data. Only do this once/at any point after data is modified
     datasets = openbot.list_dirs(data_dir)
 
-    log.info("Datasets: ", len(datasets))
+    log.info(f"Datasets: {len(datasets)}")
 
     # 1ms
     max_offset = 1e3

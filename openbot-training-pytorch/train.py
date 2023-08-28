@@ -1,3 +1,9 @@
+'''
+Name: train.py
+Description: Train utility, can be used instead of Train.ipynb 
+Date: 2023-08-28
+Date Modified: 2023-08-28
+'''
 import multiprocessing
 from klogs import kLogger
 TAG = "TRAIN"
@@ -20,7 +26,14 @@ from trainer import Trainer
 if torch.cuda.is_available():
     device = torch.device("cuda")
 
-def visualize_dataset(trainset):
+def visualize_dataset(trainset : torch.utils.data.Dataset) -> None:
+    '''
+    Visualizes the dataset, prints a random sample of 12 images
+    Args:
+        trainset (torch.utils.data.Dataset): dataset to visualize
+    Returns:
+        None
+    '''
     plt.style.use("classic")
     fig, axes = plt.subplots(2, 6, figsize=(25, 8))
     axes = axes.flatten()
@@ -31,25 +44,61 @@ def visualize_dataset(trainset):
         axes[i].set_title(f"{steering: .4f}, {throttle: .4f}")
     plt.show()
 
-def start_train(model_name, bs, epochs):
+def start_train(model_name : str, bs : int, epochs : int) -> None:
+    '''
+    Wrapper function for training single model
+    Args:
+        model_name (str): name of model to train
+        bs (int): batch size
+        epochs (int): number of epochs to train for
+    Returns:
+        None
+    '''
     train(model_name, bs, epochs, lr=1e-4, betas=(0.9,0.999), eps=1e-8)
 
-def start_queue(all_models, bs, epoch):
+def start_queue(all_models : list, bs : int, epoch : int) -> None:
+    '''
+    Wrapper function to train multiple models in sequence 
+    Args:
+        all_models (list): list of models to train
+        bs (int): batch size
+        epochs (int): number of epochs to train for
+    Returns:
+        None
+    '''
     for model in all_models:
         train(model, bs, epoch, lr=1e-4, betas=(0.9,0.999), eps=1e-8)
 
-def start_sweep(model_name, bs, epochs):
+def start_sweep(model_name : str, bs : int, epochs : int) -> None:
+    '''
+    Wrapper function for hyper parameter search of a single model 
+    Args:
+        model_name (str): name of model to train
+        bs (int): batch size
+        epochs (int): number of epochs to train for
+    Returns:
+        None
+    '''
     run = wandb.init(project='self-driving')
     lr = wandb.config.lr
     betas = (wandb.config.b1, wandb.config.b2)
     eps = wandb.config.eps
     train(model_name, bs, epochs, lr, betas, eps)
 
-def train(model_name, bs=256, epochs=1000, lr=1e-4, betas=(0.9,0.999), eps=1e-8):
-    bs = 512
-    epochs=100
-
-    print(f"Training {model_name}_{epochs}_{lr}_{bs}")
+def train(model_name : str, bs : int = 256, epochs : int = 1000, lr : float = 1e-4, betas : tuple = (0.9,0.999), eps : float = 1e-8) -> None:
+    '''
+    Main training function - wrapped by options 
+    Args:
+        model_name (str): name of model to train
+        bs (int): batch size
+        epochs (int): number of epochs to train for
+        lr (float): learning rate
+        betas (tuple): betas for Adam optimizer
+        eps (float): epsilon for Adam optimizer
+    Returns:
+        None
+    '''
+    log.info(f"Training {model_name}_{epochs}_{lr}_{bs}")
     
     if model_name+f"_{epochs}_{lr}_{bs}" in trainers:
         trainer = trainers[model_name]
@@ -62,7 +111,7 @@ def train(model_name, bs=256, epochs=1000, lr=1e-4, betas=(0.9,0.999), eps=1e-8)
         optimizer = Adam(model.parameters(), lr=lr, betas=betas, eps=eps)
         save_model = save_dir.joinpath(model.NAME+f"_{epochs}_{lr}_{bs}").joinpath("last.pth")
         if save_model.exists():
-            print(f"Loading model from {save_model}")
+            log.info(f"Loading model from {save_model}")
             state = torch.load(save_model)
             model.load_state_dict(state["state"])
             optimizer.load_state_dict(state["optim"])
@@ -70,13 +119,11 @@ def train(model_name, bs=256, epochs=1000, lr=1e-4, betas=(0.9,0.999), eps=1e-8)
         trainer = Trainer(save_dir, model, optimizer, turning_weight=5, epochs=epochs, lr=lr, bs=bs)
         save_trainer = save_dir.joinpath(model.NAME+f"_{epochs}_{lr}_{bs}").joinpath("trainer_log.npz")
         if load_trainer and save_trainer.exists():
-            print(f"Loading trainer from {save_trainer}")
+            log.info(f"Loading trainer from {save_trainer}")
             trainer.load(save_trainer)
         trainers[model_name+f"_{epochs}_{lr}_{bs}"] = trainer
         del model, optimizer
 
-
-    print(trainer.save_dir)
 
     if trainer.i < trainer.epochs:
         try:
@@ -97,10 +144,19 @@ def train(model_name, bs=256, epochs=1000, lr=1e-4, betas=(0.9,0.999), eps=1e-8)
                 pass
 
 if __name__ == "__main__":
-    #now make argparser for setting up sweep w/ wandb or regular training
+    '''
+    Examples:
+        Train a single model :
+            python train.py --task train --bs 256 --epochs 1000 resnet34 dataset/outside
+        Sweep hyper parameters :
+            python train.py --task sweep --bs 256 --epochs 1000 resnet34 dataset/outside
+        Train multiple models in sequence (must manually edit the models):
+            python train.py --task queue --bs 256 --epochs 1000 resnet34 dataset/outside
+    '''
     import argparse
     parser = argparse.ArgumentParser(description='Train a model')
     parser.add_argument('--task', type=str, help='Task to be done, could be [train, sweep, queue], default is train', default='train')
+    parser.add_argument('--sweep_id', type=str, default=None, help='sweep id to load')
     parser.add_argument('--bs', type=int, default=256, help='batch size')
     parser.add_argument('--epochs', type=int, default=1000, help='number of epochs')
     parser.add_argument('--visualize', type=bool, default=False, help='visualize dataset')
@@ -139,16 +195,20 @@ if __name__ == "__main__":
                     'eps':{'max':1e-7, 'min':1e-9}
                 }
             }
-            sweep_id = wandb.sweep(
-              sweep=sweep_configuration, 
-              project='self-driving'
-              )
-            wandb.agent(sweep_id, function=lambda: start_sweep(args.model, args.bs, args.epochs))
+            if args.sweep_id:
+                sweep_id = args.sweep_id
+            else:
+                sweep_id = wandb.sweep(
+                  sweep=sweep_configuration, 
+                  project='self-driving'
+                  )
+            wandb.agent(sweep_id, project ='self-driving', function=lambda: start_sweep(args.model, args.bs, args.epochs))
         case "queue":
             all_models = [
-                "resnet34",
+                "resnet34", 
                 "resnet18",
                 "cnn"
+                #edit these models for your own use
             ]
             run = wandb.init(project='self-driving')
             start_queue(all_models, args.bs, args.epochs)

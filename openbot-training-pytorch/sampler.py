@@ -1,5 +1,15 @@
+'''
+Name: sampler.py
+Description: Sampler for reading data from the dataset and setting up data for training
+Date: 2023-08-28
+Date Modified: 2023-08-28
+'''
 import multiprocessing as mp
 import pathlib
+
+from klogs import kLogger
+TAG = "SAMPLER"
+log = kLogger(TAG)
 
 import cv2
 import numpy as np
@@ -9,6 +19,13 @@ from torch.utils.data import Dataset, random_split
 
 
 def process_data(sample):
+    '''
+    Processes a sample and return it in the correct formats
+    Args:
+        sample (tuple): tuple of (steering, throttle, image)
+    Returns:
+        tuple: tuple of (steering, throttle, image)
+    '''
     steer, throttle, image = sample
     data = np.asarray(bytearray(image), dtype=np.uint8)
     image = cv2.imdecode(data, cv2.IMREAD_COLOR)
@@ -17,12 +34,36 @@ def process_data(sample):
 
 
 def process_image(img, aug_pixel, rangeY=(136, 360), rangeX=(208, 432), endShape=(224, 224)):
+    '''
+    Processes an image and returns it in the correct format
+    Args:
+        img (np.array): image to be processed
+        aug_pixel (int): number of pixels to augment
+        rangeY (tuple): range of pixels in Y direction to crop
+        rangeX (tuple): range of pixels in X direction to crop
+        endShape (tuple): shape of the output image
+    Returns:
+        np.array: processed image
+    '''
     new_rangeX = (rangeX[0] + aug_pixel, rangeX[1] + aug_pixel)
     new_img = img[rangeY[0]:rangeY[1], new_rangeX[0]:new_rangeX[1]]
     return cv2.resize(new_img, endShape)
 
 
 class ImageSampler(Dataset):
+    '''
+    ImageSampler class - a class for sampling images from the dataset
+
+    Args:
+        dataset_path (str): path to dataset
+    
+    Methods:
+        prepare_datasets(tfrecords)
+        load_sample(dataset_paths)
+        load_sample_tfrecord(dataset_path)
+        load_sample_openbot(dataset_path)
+        process(img, steering, throttle)
+    '''
     def __init__(self, dataset_path):
         self.datasets = []
         self.size = 0
@@ -37,6 +78,13 @@ class ImageSampler(Dataset):
         self.prepare_datasets(dataset_path)
 
     def load_sample_tfrecord(self, dataset_path):
+        '''
+        Loads a sample from a tfrecord dataset
+        Args:
+            dataset_path (str): path to dataset
+        Returns:
+            list: list of samples
+        '''
         from torchdata.datapipes.iter import FileOpener
         return [
             (sample["steer"].item(), sample["throttle"].item(), sample["image"][0]) 
@@ -44,6 +92,13 @@ class ImageSampler(Dataset):
         ]
 
     def load_sample_openbot(self, dataset_path):
+        '''
+        Loads a sample from an openbot dataset
+        Args:
+            dataset_path (str): path to dataset
+        Returns:
+            list: list of samples
+        '''
         samples = []
         for image_path, ctrl_cmd in load_labels(dataset_path, list_dirs(dataset_path)).items():
             try:
@@ -55,11 +110,18 @@ class ImageSampler(Dataset):
                     image,  # image
                 ))
             except FileNotFoundError:
-                print(f"File not found: {image_path}")
+                log.error(f"File not found: {image_path}")
 
         return samples
 
     def load_sample(self, dataset_paths):
+        '''
+        Loads a sample from a generic dataset
+        Args:
+            dataset_paths (str): path to dataset
+        Returns:
+            list: list of samples
+        '''
         # XXX: Some compatibility with old tfrecord datasets
         # This is not that efficient, so eventually we will  
         # put everything into a datapipe.
@@ -101,6 +163,17 @@ class ImageSampler(Dataset):
         self.imgs = np.stack(self.imgs)
 
     def process(self, img, steering, throttle):
+        '''
+        Processes an image and returns it in the correct format, applies translation
+        Args:
+            img (np.array): image to be processed
+            steering (float): steering angle
+            throttle (float): throttle angle
+        Returns:
+            np.array: processed image
+            float: steering angle
+            float: throttle
+        '''
         max_steering_aug = self.max_steering_aug
         scale = self.scale
 
@@ -129,6 +202,14 @@ class ImageSampler(Dataset):
 
 
 def load_full_dataset(dataset_paths, train_test_split=0.8):
+    '''
+    Loads a full dataset from a list of paths
+    Args:
+        dataset_paths (list): list of paths to datasets
+        train_test_split (float): percentage of data to be used for training
+    Returns:
+        tuple: trainset, testset
+    '''
     train_datasets = []
     test_datasets = []
     for dataset_path in dataset_paths:
@@ -150,5 +231,5 @@ def load_full_dataset(dataset_paths, train_test_split=0.8):
         train_size = int(len(trainset) * train_test_split)
         trainset, testset = random_split(trainset, [train_size, len(trainset) - train_size])
 
-    print(f"Training: {len(trainset)}, Testing {len(testset)}")
+    log.info(f"Training: {len(trainset)}, Testing {len(testset)}")
     return trainset, testset

@@ -1,3 +1,9 @@
+'''
+Name: trainer.py
+Description: Trainer to facilitate training the model, logging, and saving
+Date: 2023-08-28
+Date Modified: 2023-08-28
+'''
 import os
 import wandb
 import torch
@@ -10,7 +16,22 @@ if torch.cuda.is_available():
     device = torch.device("cuda")
 
 class Trainer:
-    def __init__(self, save_dir, model: torch.nn.Module, optim: torch.optim.Optimizer, turning_weight=5, epochs=200, lr=1e-4, bs=256):
+    '''
+    Trainer class - a class for training the model, logging, and saving
+    Args:
+        save_dir (str): path to save directory
+        model (torch.nn.Module): model to train
+        optim (torch.optim.Optimizer): optimizer to use
+        turning_weight (int): weight to use for turning
+        epochs (int): number of epochs to train for
+        lr (float): learning rate
+        bs (int): batch size
+    Methods:
+        load(fname)
+        save(fname)
+        train(sampler_train, sampler_test)
+    '''
+    def __init__(self, save_dir : str, model: torch.nn.Module, optim: torch.optim.Optimizer, turning_weight : int = 5, epochs : int = 200, lr : float = 1e-4, bs : int = 256):
         self.model = model
         self.optim = optim
         self.turning_weight = turning_weight
@@ -30,7 +51,14 @@ class Trainer:
 
         self.i = 0
 
-    def load(self, fname):
+    def load(self, fname : str) -> None:
+        '''
+        Loads a trainer from a file
+        Args:
+            fname (str): path to file
+        Returns:
+            None
+        '''
         data = np.load(fname)
         self.i = data["i"]
         self.train_log = data["train_log"].tolist()
@@ -39,7 +67,14 @@ class Trainer:
         self.best_angle_metric = data["best_angle_metric"]
         self.best_direction_metric = data["best_direction_metric"]
 
-    def save(self, fname):
+    def save(self, fname : str) -> None:
+        '''
+        Saves a trainer to a file
+        Args:
+            fname (str): path to file
+        Returns:
+            None
+        '''
         torch.save({
             "state": self.model.state_dict(),
             "optim": self.optim.state_dict(),
@@ -56,6 +91,14 @@ class Trainer:
         )
 
     def train(self, sampler_train, sampler_test):
+        '''
+        Trains the model
+        Args:
+            sampler_train (torch.utils.data.DataLoader): training data
+            sampler_test (torch.utils.data.DataLoader): testing data
+        Returns:
+            None
+        '''
         epochs = self.epochs
         batches_train = len(sampler_train)
         batches_test = len(sampler_test)
