@@ -1,10 +1,15 @@
+'''
+Name: train.py
+Description: Train utility, can be used instead of Train.ipynb 
+Date: 2023-08-28
+Date Modified: 2023-08-28
+'''
 import multiprocessing
-import os
+from klogs import kLogger
+TAG = "TRAIN"
+log = kLogger(TAG)
 import pathlib
-from collections import OrderedDict
-from metrics import direction_metric, angle_metric,loss_fn
 
-import cv2
 import numpy as np
 import torch
 from matplotlib import pyplot as plt
@@ -12,175 +17,203 @@ from numpy import random
 from scipy import signal
 from torch.optim import Adam
 from torch.utils.data import DataLoader
-from tqdm.auto import tqdm
+import wandb
 
 from models import get_model
 from sampler import load_full_dataset
+from trainer import Trainer
 
 if torch.cuda.is_available():
     device = torch.device("cuda")
 
-from metrics import direction_metric, angle_metric,loss_fn
+def visualize_dataset(trainset : torch.utils.data.Dataset) -> None:
+    '''
+    Visualizes the dataset, prints a random sample of 12 images
+    Args:
+        trainset (torch.utils.data.Dataset): dataset to visualize
+    Returns:
+        None
+    '''
+    plt.style.use("classic")
+    fig, axes = plt.subplots(2, 6, figsize=(25, 8))
+    axes = axes.flatten()
+    for i in range(12):
+        img, steering, throttle = trainset[random.randint(0, len(trainset))]
+        axes[i].imshow(img)
+        axes[i].axis("off")
+        axes[i].set_title(f"{steering: .4f}, {throttle: .4f}")
+    plt.show()
+
+def start_train(model_name : str, bs : int, epochs : int) -> None:
+    '''
+    Wrapper function for training single model
+    Args:
+        model_name (str): name of model to train
+        bs (int): batch size
+        epochs (int): number of epochs to train for
+    Returns:
+        None
+    '''
+    train(model_name, bs, epochs, lr=1e-4, betas=(0.9,0.999), eps=1e-8)
+
+def start_queue(all_models : list, bs : int, epoch : int) -> None:
+    '''
+    Wrapper function to train multiple models in sequence 
+    Args:
+        all_models (list): list of models to train
+        bs (int): batch size
+        epochs (int): number of epochs to train for
+    Returns:
+        None
+    '''
+    for model in all_models:
+        train(model, bs, epoch, lr=1e-4, betas=(0.9,0.999), eps=1e-8)
+
+def start_sweep(model_name : str, bs : int, epochs : int) -> None:
+    '''
+    Wrapper function for hyper parameter search of a single model 
+    Args:
+        model_name (str): name of model to train
+        bs (int): batch size
+        epochs (int): number of epochs to train for
+    Returns:
+        None
+    '''
+    run = wandb.init(project='self-driving')
+    lr = wandb.config.lr
+    betas = (wandb.config.b1, wandb.config.b2)
+    eps = wandb.config.eps
+    train(model_name, bs, epochs, lr, betas, eps)
+
+def train(model_name : str, bs : int = 256, epochs : int = 1000, lr : float = 1e-4, betas : tuple = (0.9,0.999), eps : float = 1e-8) -> None:
+    '''
+    Main training function - wrapped by options 
+    Args:
+        model_name (str): name of model to train
+        bs (int): batch size
+        epochs (int): number of epochs to train for
+        lr (float): learning rate
+        betas (tuple): betas for Adam optimizer
+        eps (float): epsilon for Adam optimizer
+    Returns:
+        None
+    '''
+    log.info(f"Training {model_name}_{epochs}_{lr}_{bs}")
+    
+    if model_name+f"_{epochs}_{lr}_{bs}" in trainers:
+        trainer = trainers[model_name]
+        # move the model back to device
+        trainer.model = trainer.model.to(device)
+        trainer.optim.load_state_dict(trainer.optim.state_dict())
+
+    else:
+        model = get_model(model_name)().to(device)
+        optimizer = Adam(model.parameters(), lr=lr, betas=betas, eps=eps)
+        save_model = save_dir.joinpath(model.NAME+f"_{epochs}_{lr}_{bs}").joinpath("last.pth")
+        if save_model.exists():
+            log.info(f"Loading model from {save_model}")
+            state = torch.load(save_model)
+            model.load_state_dict(state["state"])
+            optimizer.load_state_dict(state["optim"])
+
+        trainer = Trainer(save_dir, model, optimizer, turning_weight=5, epochs=epochs, lr=lr, bs=bs)
+        save_trainer = save_dir.joinpath(model.NAME+f"_{epochs}_{lr}_{bs}").joinpath("trainer_log.npz")
+        if load_trainer and save_trainer.exists():
+            log.info(f"Loading trainer from {save_trainer}")
+            trainer.load(save_trainer)
+        trainers[model_name+f"_{epochs}_{lr}_{bs}"] = trainer
+        del model, optimizer
 
 
-class Trainer:
-    def __init__(self, save_dir, model: torch.nn.Module, optim: torch.optim.Optimizer, turning_weight=5, epochs=200):
-        self.model = model
-        self.optim = optim
-        self.turning_weight = turning_weight
-        self.epochs = epochs
+    if trainer.i < trainer.epochs:
+        try:
+            sampler_train = DataLoader(trainset, batch_size=bs, shuffle=True, num_workers=multiprocessing.cpu_count())
+            sampler_test = DataLoader(testset, batch_size=bs, shuffle=True, num_workers=multiprocessing.cpu_count())
+            trainer.train(sampler_train, sampler_test)
+        finally:
+            # Move the model to CPU
+            trainer.model = trainer.model.to('cpu')
+            trainer.optim.load_state_dict(trainer.optim.state_dict())
+            trainer.save(pathlib.Path(MODEL_SAVE_PATH).joinpath(trainer.model.NAME+f"_{epochs}_{lr}_{bs}").joinpath("trainer_log.npz"))
 
-        self.save_dir = pathlib.Path(save_dir).joinpath(model.NAME)
-        self.save_dir.mkdir(parents=True, exist_ok=True)
+            try:
+                # Close iterator
+                sampler_test.close()
+                sampler_train.close()
+            except:
+                pass
 
-        self.train_log = []  # loss, angle, direction
-        self.validation_log = []  # loss, angle, direction
+if __name__ == "__main__":
+    '''
+    Examples:
+        Train a single model :
+            python train.py --task train --bs 256 --epochs 1000 resnet34 dataset/outside
+        Sweep hyper parameters :
+            python train.py --task sweep --bs 256 --epochs 1000 resnet34 dataset/outside
+        Train multiple models in sequence (must manually edit the models):
+            python train.py --task queue --bs 256 --epochs 1000 resnet34 dataset/outside
+    '''
+    import argparse
+    parser = argparse.ArgumentParser(description='Train a model')
+    parser.add_argument('--task', type=str, help='Task to be done, could be [train, sweep, queue], default is train', default='train')
+    parser.add_argument('--sweep_id', type=str, default=None, help='sweep id to load')
+    parser.add_argument('--bs', type=int, default=256, help='batch size')
+    parser.add_argument('--epochs', type=int, default=1000, help='number of epochs')
+    parser.add_argument('--visualize', type=bool, default=False, help='visualize dataset')
+    parser.add_argument('model', type=str, default='resnet34', help='model name')
+    parser.add_argument('data', type=str, default='dataset/outside', help='model name')
+    args = parser.parse_args()
+    log.info(args)
 
-        self.best_loss = np.inf
-        self.best_angle_metric = 0
-        self.best_direction_metric = 0
+    MODEL_SAVE_PATH = "models"
+    DATA = [args.data]
+    log.info(f"Loading dataset from {DATA}")
+    trainset, testset = load_full_dataset(DATA, train_test_split=0.8)
 
-        self.i = 0
+    if args.visualize:
+        log.info("Visualize trainset")
+        visualize_dataset(trainset)
+        log.info("Visualize testset") 
+        visualize_dataset(testset)
 
-    def load(self, fname):
-        data = np.load(fname)
-        self.i = data["i"]
-        self.train_log = data["train_log"].tolist()
-        self.validation_log = data["validation_log"].tolist()
-        self.best_loss = data["best_loss"]
-        self.best_angle_metric = data["best_angle_metric"]
-        self.best_direction_metric = data["best_direction_metric"]
+    trainers = {}
 
-    def save(self, fname):
-        torch.save({
-            "state": self.model.state_dict(),
-            "optim": self.optim.state_dict(),
-        }, os.path.join(self.save_dir, f"last.pth"))
+    save_dir = pathlib.Path(MODEL_SAVE_PATH)
+    load_trainer = True
 
-        np.savez_compressed(
-            fname,
-            train_log=self.train_log,
-            validation_log=self.validation_log,
-            i=self.i,
-            best_loss=self.best_loss,
-            best_angle_metric=self.best_angle_metric,
-            best_direction_metric=self.best_direction_metric
-        )
-
-    def train(self, sampler_train, sampler_test):
-        epochs = self.epochs
-        batches_train = len(sampler_train)
-        batches_test = len(sampler_test)
-
-        epochs_bar = tqdm(total=epochs)
-        epochs_bar.set_description("Epochs")
-        batch_bar = tqdm(total=batches_train)
-
-        epochs_bar.update(self.i)
-        epochs_bar.refresh()
-        while self.i < epochs:
-            #Training
-            batch_bar.set_description("Training")
-            batch_bar.reset(batches_train)
-            for i, (img, steering, throttle) in enumerate(sampler_train):
-                Y = torch.stack([steering, throttle], dim=1).type(torch.float32).to(device)
-                #Tensor Processing
-                X = img.to(device).permute(0, 3, 1, 2) / 256 #Starting dimensions [1,100,90,160] -> After permute [100, 1, 90, 160] (Pytorch Tensor format[Number, Channels, Height, Width])
-
-                #Using the model for inference
-                self.optim.zero_grad()
-                Y_pred = self.model(X)
-
-                #Loss calculation and backpropogation
-                loss = loss_fn(Y[:, 0], Y[:, 1], Y_pred[:, 0], Y_pred[:, 1], throttle_weight=0.2)
-                loss.backward()
-                self.optim.step()
-
-                #Some extra metrics to grade performance by
-                loss = loss.item()
-                ang_metric = angle_metric(Y_pred, Y).item()
-                dir_metric, num = direction_metric(Y_pred, Y)
-                dir_metric = (dir_metric / num).item() if num > 0 else np.nan
-
-                #Debugging/Logging
-                self.train_log.append((loss, ang_metric, dir_metric))
-
-                batch_bar.set_postfix(ordered_dict=OrderedDict(
-                    Loss=f"{loss: .3f}",
-                    Best_loss=f"{self.best_loss: .3f}",
-                    Angle=f"{ang_metric: .3f}",
-                    Best_angle=f"{self.best_angle_metric: .3f}",
-                    Direction=f"{dir_metric: .3f}",
-                    Best_Dir=f"{self.best_direction_metric: .3f}"
-                ))
-                batch_bar.update()
-
-            #Validation (Testing)
-            batch_bar.set_description("Validation")
-            batch_bar.reset(batches_test)
-            validation_avg = torch.zeros(batches_test, 3)  # loss, angle, direction_sum
-            direction_num = 0
-
-            for j, (img, steering, throttle) in enumerate(sampler_test):
-                Y = torch.stack([steering, throttle], dim=1).type(torch.float32).to(device)
-                X = img.to(device).permute(0, 3, 1, 2) / 256
-
-                with torch.no_grad():
-                    Y_pred = self.model(X)
-
-                # Test on Validation Set
-                val_loss = loss_fn(Y[:, 0], Y[:, 1], Y_pred[:, 0], Y_pred[:, 1], throttle_weight=0.2)
-                ang_metric = angle_metric(Y_pred, Y)
-                dir_metric, num = direction_metric(Y_pred, Y)
-                validation_avg[j] = torch.stack([val_loss, ang_metric, dir_metric])
-                direction_num += num
-
-                batch_bar.set_postfix(ordered_dict=OrderedDict(
-                    Loss=f"{val_loss.item(): .3f}",
-                    Best_loss=f"{self.best_loss: .3f}",
-                    Angle=f"{ang_metric.item(): .3f}",
-                    Best_angle=f"{self.best_angle_metric: .3f}",
-                    Direction=f"{dir_metric.item() / num if num > 0 else np.nan: .3f}",
-                    Best_Dir=f"{self.best_direction_metric: .3f}"
-                ))
-                batch_bar.update()
-
-            validation_avg = validation_avg.sum(dim=0)
-            validation_avg[:2] /= batches_test
-            validation_avg[2] /= direction_num
-
-            #Debugging/Logging
-            self.validation_log.append(validation_avg.tolist())
-
-            val_loss, ang_metric, dir_metric = self.validation_log[-1]
-            if val_loss < self.best_loss:
-                self.best_loss = val_loss
-                if self.best_loss < 0.02:
-                    torch.save({
-                        "state": self.model.state_dict(),
-                        "optim": self.optim.state_dict(),
-                    }, os.path.join(self.save_dir, f"best_loss.pth"))
-            if ang_metric > self.best_angle_metric:
-                self.best_angle_metric = ang_metric
-                if self.best_angle_metric > 0.6:
-                    torch.save({
-                        "state": self.model.state_dict(),
-                        "optim": self.optim.state_dict(),
-                    }, os.path.join(self.save_dir, f"best_angle.pth"))
-            if dir_metric > self.best_direction_metric:
-                self.best_direction_metric = dir_metric
-                if self.best_direction_metric > 0.8:
-                    torch.save({
-                        "state": self.model.state_dict(),
-                        "optim": self.optim.state_dict(),
-                    }, os.path.join(self.save_dir, f"best_dir.pth"))
-
-            # Slow for large model
-            # torch.save({
-            #     "state": self.model.state_dict(),
-            #     "optim": self.optim.state_dict(),
-            # }, os.path.join(self.save_dir, f"last.pth"))
-
-            batch_bar.refresh()
-            epochs_bar.update()
-            self.i += 1
+    match args.task:
+        case "sweep": 
+            sweep_configuration = {
+                'method' : 'random',
+                'name' : 'sweep',
+                'metric': {'goal': 'maximize', 'name':'val_angle'},
+                'parameters':
+                {
+                    'lr': {'max':0.01,'min':1e-6},
+                    'b1': {'max':0.9, 'min':0.1},
+                    'b2': {'max':0.9, 'min':0.1},
+                    'eps':{'max':1e-7, 'min':1e-9}
+                }
+            }
+            if args.sweep_id:
+                sweep_id = args.sweep_id
+            else:
+                sweep_id = wandb.sweep(
+                  sweep=sweep_configuration, 
+                  project='self-driving'
+                  )
+            wandb.agent(sweep_id, project ='self-driving', function=lambda: start_sweep(args.model, args.bs, args.epochs))
+        case "queue":
+            all_models = [
+                "resnet34", 
+                "resnet18",
+                "cnn"
+                #edit these models for your own use
+            ]
+            run = wandb.init(project='self-driving')
+            start_queue(all_models, args.bs, args.epochs)
+        case "train":
+            run = wandb.init(project='self-driving')
+            start_train(args.model, args.bs, args.epochs)
+        case _:
+            log.error("No action specified")

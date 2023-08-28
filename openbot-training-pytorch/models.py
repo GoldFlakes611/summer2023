@@ -1,9 +1,12 @@
-#==============================================================
-# Name: models.py
-# Desc: This program is used to define the convolution
-# neural network using pytorch, it provides methods to use the
-# model for training and inference
-#==============================================================
+'''
+Name: models.py
+Description: This program is used to define the neural networks using pytorch
+            It also contains the ModelHub class which is used to load and save
+            models. Helper functions such as get_model and get_model_openbot
+            are for ease of loading models in seperate scripts
+Date: 2023-08-25
+Date Modified: 2023-08-25
+'''
 import torch
 from torch import nn
 from torchvision.models import ViT_B_16_Weights, vit_b_16
@@ -23,7 +26,17 @@ class CropKernel(nn.Module):
         return Y
 
 class EdgeKernel(nn.Module):
-    def __init__(self, channels=3, kernel=3) -> None:
+    '''
+    EdgeKernel class - used to define a convolutional layer that filters edges from images
+
+    Args: 
+        channels (int): number of channels in input image
+        kernel (int): size of kernel to use for convolution
+
+    Methods:
+        forward(X): forward pass of the model
+    '''
+    def __init__(self, channels : int = 3, kernel : int = 3) -> None:
         super().__init__()
         self.Gx = nn.Conv2d(in_channels=channels, out_channels=channels, kernel_size=kernel, padding=1)
         self.Gx.weight.data = torch.zeros(*self.Gx.weight.data.shape)
@@ -37,34 +50,33 @@ class EdgeKernel(nn.Module):
         self.Gy.weight.requires_grad = False
         self.Gx.weight.requires_grad = False
 
-    def forward(self, X):
+    def forward(self, X : torch.Tensor) -> torch.Tensor:
+        '''
+        Forward pass of the model
+        Args:
+            X (torch.Tensor): input image
+        Returns:
+            X (torch.Tensor): output image
+        '''
         X = torch.sqrt(self.Gx(X)**2 + self.Gy(X)**2)
         X = X / X.amax(dim=(2, 3), keepdim=True)
         return X
 
 
 class CNN(nn.Module):
-    """ The Model class defines both the pytorch model
-     and methods to train and it and run inference
+    ''' 
+    CNN class - used to define a simple convolutional neural network
 
-    Attributes:
-    -----------
-    module : nn.Sequential
-        Pytorch implementation of the model contains:
-            -5 convolution layers
-            -3 fully connected layers
-
-        """
+    Args:
+        in_channels (int): number of channels in input image
+        edge_filter (bool): whether to filter edges from input image
+    
+    Methods:
+        forward(X): forward pass of the model
+    '''
     NAME = "cnn"
 
-    def __init__(self, in_channels=3, edge_filter=True):
-        """Simple init function for class, defines model as series of sequential modules
-
-        Parameters:
-        -----------
-        in_channels : int
-            Number of channels of input tensor
-        """
+    def __init__(self, in_channels : int = 3, edge_filter : bool = True) -> None:
         super().__init__()
 
         self.filter = EdgeKernel(in_channels) if edge_filter else nn.Identity()
@@ -97,18 +109,14 @@ class CNN(nn.Module):
             nn.LazyLinear(2),
         )
 
-    def forward(self, image):
-        """Forward pass of model
-
-        Parameters:
-        -----------
-        image : torch.tensor
-            image or batch of images in tensor form, after data augmentation and
-            edge filtering
-
+    def forward(self, image : torch.Tensor) -> torch.Tensor:
+        '''
+        Forward pass of model
+        Args:
+            image (torch.Tensor): input image
         Returns:
-        --------
-        torch.tensor -> output of neural net for each image in batch"""
+            output (torch.Tensor): output of model
+        '''
         image = self.filter(image)
         output = self.image_module(image)
         return output
@@ -147,8 +155,20 @@ class Yolo(nn.Module):
 
 
 class ModelHubBase(nn.Module):
+    '''
+    ModelHubBase Class - generic class for loading and using hub models, not to be used directly
+                        but instead with get_model function
+
+    Args:
+        edge_filter (bool): whether to filter edges from input image
+        old_model (bool): whether to use old model (for backward compatibility)
+
+    Methods:
+        forward(X): forward pass of the model
+        load_model(model_name): load model from hub by name
+    '''
     NAME = None
-    def __init__(self, edge_filter=True, old_model=False, crop_image=False):
+    def __init__(self, edge_filter : bool = True, old_model : bool = False, crop_image : bool = False) -> None:
         super().__init__()
         self.filter = EdgeKernel(3) if edge_filter else nn.Identity()
         self.crop = CropKernel(3,90) if crop_image else nn.Identity()
@@ -175,18 +195,33 @@ class ModelHubBase(nn.Module):
             else:
                 self.output = nn.LazyLinear(2)
 
-    def forward(self, x):
+    def forward(self, x : torch.Tensor) -> torch.Tensor:
+        '''
+        Forward pass of the model
+        Args:
+            X (torch.Tensor): input image
+        Returns:
+            X (torch.Tensor): output image
+        '''
         x = self.filter(x)
         x = self.crop(x)
         x = self.model(x)
-        if self.NAME == "googlenet":  # Fix ouput of googlenet
-            x = x[0]
+        #commented for conversion
+        #if self.NAME == "googlenet":  # Fix ouput of googlenet
+            #x = x[0]
 
         x = self.output(x)
         return x
 
     @classmethod
-    def load_model(cls, model_name):
+    def load_model(cls, model_name : str) -> nn.Module:
+        '''
+        Load model from hub by name
+        Args:
+            model_name (str): name of model
+        Returns:
+            model (ModelHubBase): model loaded from hub
+        '''
         # This is a hack for compatibility
         # This method create a new subclass of ModelHubBase
         # and set the NAME attribute to the model_name
@@ -234,6 +269,13 @@ models = {
 
 
 def get_model(model_name):
+    '''
+    Get model by name from either the models dict or from hub
+    Args:
+        model_name (str): name of model
+    Returns:
+        model (nn.Module): model loaded from hub
+    '''
     if model_name in models:
         return models[model_name]
     else:
@@ -241,14 +283,36 @@ def get_model(model_name):
     
     
 class AvgPool11(nn.Module):
+    '''
+    AvgPool11 Class - used to define a simple average pooling layer
+    Args:
+        None
+    Methods:
+        forward(X): forward pass of the model
+    '''
     def __init__(self):
         super().__init__()
         
-    def forward(self, x):
+    def forward(self, x : torch.Tensor) -> torch.Tensor:
+        '''
+        Forward pass of the model
+        Args:
+            X (torch.Tensor): input image
+        Returns:
+            X (torch.Tensor): output image
+        '''
         return x.mean(dim=-1, keepdim=True).mean(dim=-2, keepdim=True)
 
 
-def get_model_openbot(model_name):
+def get_model_openbot(model_name : str) -> nn.Module:
+    '''
+    Get model by name from either the models dict or from hub
+    Then wrap it in a class that has outputs compatible with openbot
+    Args:
+        model_name (str): name of model
+    Returns:
+        model (nn.Module): model loaded from hub
+    '''
     model_cls = get_model(model_name)
     class Model(model_cls):
         def forward(self, x):
