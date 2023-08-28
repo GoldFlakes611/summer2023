@@ -67,7 +67,7 @@ class Trainer:
         self.best_angle_metric = data["best_angle_metric"]
         self.best_direction_metric = data["best_direction_metric"]
 
-    def save(self, fname : str) -> None:
+    def save(self) -> None:
         '''
         Saves a trainer to a file
         Args:
@@ -78,10 +78,10 @@ class Trainer:
         torch.save({
             "state": self.model.state_dict(),
             "optim": self.optim.state_dict(),
-        }, os.path.join(self.save_dir, f"last.pth"))
+        }, self.save_dir.joinpath(f"last.pth"))
 
         np.savez_compressed(
-            fname,
+            self.save_dir.joinpath("trainer_log.npz"),
             train_log=self.train_log,
             validation_log=self.validation_log,
             i=self.i,

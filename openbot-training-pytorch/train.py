@@ -134,7 +134,7 @@ def train(model_name : str, bs : int = 256, epochs : int = 1000, lr : float = 1e
             # Move the model to CPU
             trainer.model = trainer.model.to('cpu')
             trainer.optim.load_state_dict(trainer.optim.state_dict())
-            trainer.save(pathlib.Path(MODEL_SAVE_PATH).joinpath(trainer.model.NAME+f"_{epochs}_{lr}_{bs}").joinpath("trainer_log.npz"))
+            trainer.save()
 
             try:
                 # Close iterator
