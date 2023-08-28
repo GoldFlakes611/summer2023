@@ -7,15 +7,20 @@ Date Modified: 2023-08-28
 import multiprocessing as mp
 import pathlib
 
-from klogs import kLogger
-TAG = "SAMPLER"
-log = kLogger(TAG)
-
 import cv2
 import numpy as np
+import torch
+from klogs import kLogger
 from openbot import list_dirs, load_labels
 from scipy.stats import truncnorm
 from torch.utils.data import Dataset, random_split
+from torchvision import transforms
+
+TAG = "SAMPLER"
+log = kLogger(TAG)
+
+if torch.cuda.is_available():
+    device = torch.device("cuda")
 
 
 def process_data(sample):
@@ -31,23 +36,6 @@ def process_data(sample):
     image = cv2.imdecode(data, cv2.IMREAD_COLOR)
     image = cv2.cvtColor(image , cv2.COLOR_BGR2RGB)
     return steer, throttle, image
-
-#change the value of rangeY to(58,282) for center crop and (136,360) for bottom crop
-def process_image(img, aug_pixel, rangeY=(136, 360), rangeX=(208, 432), endShape=(224, 224)):
-    '''
-    Processes an image and returns it in the correct format
-    Args:
-        img (np.array): image to be processed
-        aug_pixel (int): number of pixels to augment
-        rangeY (tuple): range of pixels in Y direction to crop
-        rangeX (tuple): range of pixels in X direction to crop
-        endShape (tuple): shape of the output image
-    Returns:
-        np.array: processed image
-    '''
-    new_rangeX = (rangeX[0] + aug_pixel, rangeX[1] + aug_pixel)
-    new_img = img[rangeY[0]:rangeY[1], new_rangeX[0]:new_rangeX[1]]
-    return cv2.resize(new_img, endShape)
 
 
 class ImageSampler(Dataset):
@@ -70,6 +58,11 @@ class ImageSampler(Dataset):
         self.imgs = []
         self.steering = []
         self.throttle = []
+
+        self.transform = transforms.Compose([
+            transforms.Resize((224, 224), antialias=False),
+            transforms.ColorJitter(brightness=0.1, contrast=0.1, hue=0.05, saturation=0.05)
+        ])
 
         self.steering_factor = 208  # when steering is 1, we move 300 pixel (assumption)
         max_aug = 208
@@ -160,7 +153,25 @@ class ImageSampler(Dataset):
         """
         self.steering = np.array(self.steering)
         self.throttle = np.array(self.throttle)
-        self.imgs = np.stack(self.imgs)
+        self.imgs = torch.from_numpy(np.stack(self.imgs))
+
+    def process_image(self, img, aug_pixel, rangeY=(136, 360), rangeX=(208, 432), endShape=(224, 224)):
+        '''
+        Processes an image and returns it in the correct format
+        Args:
+            img (np.array): image to be processed
+            aug_pixel (int): number of pixels to augment
+            rangeY (tuple): range of pixels in Y direction to crop
+            rangeX (tuple): range of pixels in X direction to crop
+            endShape (tuple): shape of the output image
+        Returns:
+            np.array: processed image
+        Note:
+            change the value of rangeY to(58,282) for center crop and (136,360) for bottom crop
+        '''
+        new_rangeX = (rangeX[0] + aug_pixel, rangeX[1] + aug_pixel)
+        img = img[rangeY[0]:rangeY[1], new_rangeX[0]:new_rangeX[1]]
+        return self.transform(img.permute(2, 0, 1))
 
     def process(self, img, steering, throttle):
         '''
@@ -187,7 +198,7 @@ class ImageSampler(Dataset):
         aug = np.floor(diff * self.steering_factor).astype('int32')
         steering = r  # The pixel to angle conversion is approximate
 
-        img = process_image(img, aug)
+        img = self.process_image(img.to(device), aug)
         return img, steering, throttle
 
     def __len__(self):
