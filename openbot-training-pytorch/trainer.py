@@ -5,16 +5,16 @@ Date: 2023-08-28
 Date Modified: 2023-08-28
 '''
 import os
-import wandb
-import torch
 import pathlib
-import numpy as np
-from tqdm.auto import tqdm
 from collections import OrderedDict
-from metrics import direction_metric, angle_metric, loss_fn
 
-if torch.cuda.is_available():
-    device = torch.device("cuda")
+import numpy as np
+import torch
+from device import device
+from metrics import angle_metric, direction_metric, loss_fn
+from tqdm.auto import tqdm
+
+import wandb
 
 
 class Trainer:

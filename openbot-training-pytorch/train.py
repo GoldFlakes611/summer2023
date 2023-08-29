@@ -8,12 +8,12 @@ import pathlib
 
 import torch
 from dataloader import FastDataLoader
+from device import device
 from klogs import kLogger
 from matplotlib import pyplot as plt
 from models import get_model
 from numpy import random
 from sampler import load_full_dataset
-from scipy import signal
 from torch.optim import Adam
 from trainer import Trainer
 
@@ -21,9 +21,6 @@ import wandb
 
 TAG = "TRAIN"
 log = kLogger(TAG)
-
-if torch.cuda.is_available():
-    device = torch.device("cuda")
 
 
 def visualize_dataset(trainset : torch.utils.data.Dataset) -> None:

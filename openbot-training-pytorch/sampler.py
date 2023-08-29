@@ -9,6 +9,7 @@ import pathlib
 import mp_sharedmap
 import numpy as np
 import torch
+from device import device
 from klogs import kLogger
 from openbot import list_dirs, load_labels
 from scipy.stats import truncnorm
@@ -17,9 +18,6 @@ from torchvision import io, transforms
 
 TAG = "SAMPLER"
 log = kLogger(TAG)
-
-if torch.cuda.is_available():
-    device = torch.device("cuda")
 
 
 def process_data(sample):
