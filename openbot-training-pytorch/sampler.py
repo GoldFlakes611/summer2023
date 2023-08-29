@@ -111,7 +111,7 @@ class ImageSampler(Dataset):
                     image_path,  # image
                 ))
             else:
-                log.error(f"File not found: {image_path}")
+                log.debug(f"File not found: {image_path}")
 
         return samples
 
