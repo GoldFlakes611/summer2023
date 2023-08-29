@@ -106,13 +106,6 @@ def train(model_name : str, bs : int = 256, epochs : int = 1000, lr : float = 1e
     else:
         model = get_model(model_name)().to(device)
         optimizer = Adam(model.parameters(), lr=lr, betas=betas, eps=eps)
-        save_model = save_dir.joinpath(model.NAME+f"_{epochs}_{lr}_{bs}").joinpath("last.pth")
-        if save_model.exists():
-            log.info(f"Loading model from {save_model}")
-            state = torch.load(save_model)
-            model.load_state_dict(state["state"])
-            optimizer.load_state_dict(state["optim"])
-
         trainer = Trainer(save_dir, model, optimizer, turning_weight=5, epochs=epochs, lr=lr, bs=bs)
         if load_trainer:
             log.info(f"Loading trainer")

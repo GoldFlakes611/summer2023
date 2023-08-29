@@ -11,10 +11,14 @@ from collections import OrderedDict
 import numpy as np
 import torch
 from device import device
+from klogs import kLogger
 from metrics import angle_metric, direction_metric, loss_fn
 from tqdm.auto import tqdm
 
 import wandb
+
+TAG = "TRAINER"
+log = kLogger(TAG)
 
 
 class Trainer:
@@ -62,16 +66,22 @@ class Trainer:
             None
         '''
         trainer = self.save_dir.joinpath("trainer_log.npz")
-        if not trainer.exists():
-            return
+        save_model = self.save_dir.joinpath("last.pth")
 
-        data = np.load(trainer)
-        self.i = data["i"]
-        self.train_log = data["train_log"].tolist()
-        self.validation_log = data["validation_log"].tolist()
-        self.best_loss = data["best_loss"]
-        self.best_angle_metric = data["best_angle_metric"]
-        self.best_direction_metric = data["best_direction_metric"]
+        if trainer.exists() and save_model.exists():
+            log.info(f"Loading trainer from {self.save_dir}")
+
+            state = torch.load(save_model)
+            self.model.load_state_dict(state["state"])
+            self.optim.load_state_dict(state["optim"])
+
+            data = np.load(trainer)
+            self.i = data["i"]
+            self.train_log = data["train_log"].tolist()
+            self.validation_log = data["validation_log"].tolist()
+            self.best_loss = data["best_loss"]
+            self.best_angle_metric = data["best_angle_metric"]
+            self.best_direction_metric = data["best_direction_metric"]
 
     def save(self) -> None:
         '''
