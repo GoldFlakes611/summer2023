@@ -102,6 +102,7 @@ class ImageSampler(Dataset):
             list: list of samples
         '''
         samples = []
+        count = 0
         for image_path, ctrl_cmd in load_labels(dataset_path, list_dirs(dataset_path)).items():
             if pathlib.Path(image_path).exists():
 
@@ -112,7 +113,10 @@ class ImageSampler(Dataset):
                 ))
             else:
                 log.debug(f"File not found: {image_path}")
+                # XXX: do not report every missing file before we fix the frame matching problem
+                count += 1
 
+        log.error(f"Found {count} missing images")
         return samples
 
     def load_sample(self, dataset_paths):
