@@ -12,8 +12,10 @@ import numpy as np
 from tqdm.auto import tqdm
 from collections import OrderedDict
 from metrics import direction_metric, angle_metric, loss_fn
+
 if torch.cuda.is_available():
     device = torch.device("cuda")
+
 
 class Trainer:
     '''
@@ -51,7 +53,7 @@ class Trainer:
 
         self.i = 0
 
-    def load(self, fname : str) -> None:
+    def load(self) -> None:
         '''
         Loads a trainer from a file
         Args:
@@ -59,7 +61,11 @@ class Trainer:
         Returns:
             None
         '''
-        data = np.load(fname)
+        trainer = self.save_dir.joinpath("trainer_log.npz")
+        if not trainer.exists():
+            return
+
+        data = np.load(trainer)
         self.i = data["i"]
         self.train_log = data["train_log"].tolist()
         self.validation_log = data["validation_log"].tolist()

@@ -117,10 +117,10 @@ def train(model_name : str, bs : int = 256, epochs : int = 1000, lr : float = 1e
             optimizer.load_state_dict(state["optim"])
 
         trainer = Trainer(save_dir, model, optimizer, turning_weight=5, epochs=epochs, lr=lr, bs=bs)
-        save_trainer = save_dir.joinpath(model.NAME+f"_{epochs}_{lr}_{bs}").joinpath("trainer_log.npz")
-        if load_trainer and save_trainer.exists():
-            log.info(f"Loading trainer from {save_trainer}")
-            trainer.load(save_trainer)
+        if load_trainer:
+            log.info(f"Loading trainer")
+            trainer.load()
+
         trainers[model_name+f"_{epochs}_{lr}_{bs}"] = trainer
         del model, optimizer
 
