@@ -4,17 +4,16 @@ Description: Sampler for reading data from the dataset and setting up data for t
 Date: 2023-08-28
 Date Modified: 2023-08-28
 '''
-import multiprocessing as mp
 import pathlib
 
-import cv2
+import mp_sharedmap
 import numpy as np
 import torch
 from klogs import kLogger
 from openbot import list_dirs, load_labels
 from scipy.stats import truncnorm
 from torch.utils.data import Dataset, random_split
-from torchvision import transforms
+from torchvision import io, transforms
 
 TAG = "SAMPLER"
 log = kLogger(TAG)
@@ -32,9 +31,12 @@ def process_data(sample):
         tuple: tuple of (steering, throttle, image)
     '''
     steer, throttle, image = sample
-    data = np.asarray(bytearray(image), dtype=np.uint8)
-    image = cv2.imdecode(data, cv2.IMREAD_COLOR)
-    image = cv2.cvtColor(image , cv2.COLOR_BGR2RGB)
+    if isinstance(image, str):
+        image = io.read_image(image, mode=io.ImageReadMode.RGB)
+    else:
+        data = torch.tensor(bytearray(image), dtype=torch.uint8)
+        image = io.decode_image(data, mode=io.ImageReadMode.RGB)
+
     return steer, throttle, image
 
 
@@ -94,15 +96,14 @@ class ImageSampler(Dataset):
         '''
         samples = []
         for image_path, ctrl_cmd in load_labels(dataset_path, list_dirs(dataset_path)).items():
-            try:
-                with open(image_path, "rb") as f:
-                    image = f.read()
+            if pathlib.Path(image_path).exists():
+
                 samples.append((
                     float(ctrl_cmd[1]) / 255.0,  # steer
                     float(ctrl_cmd[0]) / 255.0,  # throttle
-                    image,  # image
+                    image_path,  # image
                 ))
-            except FileNotFoundError:
+            else:
                 log.error(f"File not found: {image_path}")
 
         return samples
@@ -127,33 +128,16 @@ class ImageSampler(Dataset):
 
         return samples
 
-    def prepare_datasets(self, tfrecords):
+    def prepare_datasets(self, dataset_paths):
         """adds the datasets found in directories: dirs to each of their corresponding member variables
 
         Parameters:
         -----------
         dirs : string/list of strings
             Directories where dataset is stored"""
-        self.datasets.extend(tfrecords)
-        dataset = self.load_sample(tfrecords)
-        with mp.Pool() as pool:
-            data = pool.map(process_data, dataset)
-
-        self.size += len(data)
-        # Transpose the data
-        steering, throttle, imgs = list(zip(*data))
-        self.imgs.extend(imgs)
-        self.steering.extend(steering)
-        self.throttle.extend(throttle)
-        self._prepare()
-
-    def _prepare(self):
-        """
-        Run this function before sampling, and after adding all the datasets
-        """
-        self.steering = np.array(self.steering)
-        self.throttle = np.array(self.throttle)
-        self.imgs = torch.from_numpy(np.stack(self.imgs))
+        dataset = self.load_sample(dataset_paths)
+        self.size = len(dataset)
+        self.steering, self.throttle, self.imgs = mp_sharedmap.map(process_data, dataset)
 
     def process_image(self, img, aug_pixel, rangeY=(136, 360), rangeX=(208, 432), endShape=(224, 224)):
         '''
@@ -170,8 +154,8 @@ class ImageSampler(Dataset):
             change the value of rangeY to(58,282) for center crop and (136,360) for bottom crop
         '''
         new_rangeX = (rangeX[0] + aug_pixel, rangeX[1] + aug_pixel)
-        img = img[rangeY[0]:rangeY[1], new_rangeX[0]:new_rangeX[1]]
-        return self.transform(img.permute(2, 0, 1))
+        img = img[:, rangeY[0]:rangeY[1], new_rangeX[0]:new_rangeX[1]]
+        return self.transform(img)
 
     def process(self, img, steering, throttle):
         '''
