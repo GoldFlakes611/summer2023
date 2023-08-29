@@ -44,7 +44,11 @@ class ImageSampler(Dataset):
 
     Args:
         dataset_path (str): path to dataset
-    
+        use_cuda (bool): whether to use cuda for image processing
+            If Ture there will be ~400M * num_of_processes additional GPU memory usage.
+            It's recommended to set the number of processes to round 4 if use_cuda is True.
+            Use False if there is not enough GPU memory, or the CPU is not the bottleneck.
+
     Methods:
         prepare_datasets(tfrecords)
         load_sample(dataset_paths)
@@ -52,12 +56,17 @@ class ImageSampler(Dataset):
         load_sample_openbot(dataset_path)
         process(img, steering, throttle)
     '''
-    def __init__(self, dataset_path):
+    def __init__(self, dataset_path, use_cuda=True):
         self.datasets = []
         self.size = 0
         self.imgs = []
         self.steering = []
         self.throttle = []
+
+        if use_cuda:
+            self.device = device
+        else:
+            self.device = torch.device('cpu')
 
         self.transform = transforms.Compose([
             transforms.Resize((224, 224), antialias=False),
@@ -180,7 +189,7 @@ class ImageSampler(Dataset):
         aug = np.floor(diff * self.steering_factor).astype('int32')
         steering = r  # The pixel to angle conversion is approximate
 
-        img = self.process_image(img.to(device), aug)
+        img = self.process_image(img.to(self.device), aug)
         return img, steering, throttle
 
     def __len__(self):
