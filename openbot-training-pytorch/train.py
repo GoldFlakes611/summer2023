@@ -13,6 +13,7 @@ from klogs import kLogger
 from matplotlib import pyplot as plt
 from models import get_model
 from numpy import random
+import sampler
 from sampler import load_full_dataset
 from torch.optim import Adam
 from trainer import Trainer
@@ -51,7 +52,7 @@ def start_train(model_name : str, bs : int, epochs : int) -> None:
     Returns:
         None
     '''
-    train(model_name, bs, epochs, lr=1e-4, betas=(0.9,0.999), eps=1e-8)
+    train(model_name, bs, epochs, lr=0.009196, betas=(0.5288,0.5614), eps=7.271e-8)
 
 def start_queue(all_models : list, bs : int, epoch : int) -> None:
     '''
@@ -143,6 +144,8 @@ if __name__ == "__main__":
         Train multiple models in sequence (must manually edit the models):
             python train.py --task queue --bs 256 --epochs 1000 resnet34 dataset/outside
     '''
+    #XXX: Temporarily disable logging missing files
+    sampler.log.setLevel('info')
     import argparse
     parser = argparse.ArgumentParser(description='Train a model')
     parser.add_argument('--task', type=str, help='Task to be done, could be [train, sweep, queue], default is train', default='train')

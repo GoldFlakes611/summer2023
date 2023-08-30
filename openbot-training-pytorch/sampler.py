@@ -112,6 +112,7 @@ class ImageSampler(Dataset):
                     image_path,  # image
                 ))
             else:
+                log.debug(f"File not found: {image_path}")
                 # XXX: do not report every missing file before we fix the frame matching problem
                 count += 1
 
