@@ -235,11 +235,9 @@ class Trainer:
                         "optim": self.optim.state_dict(),
                     }, os.path.join(self.save_dir, f"best_dir.pth"))
 
-            # Slow for large model
-            # torch.save({
-            #     "state": self.model.state_dict(),
-            #     "optim": self.optim.state_dict(),
-            # }, os.path.join(self.save_dir, f"last.pth"))
+            # Reasonable to save every 10 epochs
+            if self.i % 10 == 0:
+                self.save()
 
             batch_bar.refresh()
             epochs_bar.update()
