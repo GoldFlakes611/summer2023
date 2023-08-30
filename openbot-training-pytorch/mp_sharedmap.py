@@ -26,6 +26,7 @@ def init_worker(i, output_type_, output_):
     fn = global_data[i][1]
     output = to_array(output_type, output_)
     # XXX: https://github.com/pytorch/pytorch/issues/17199#issuecomment-493672631
+    # XXX: or using intel openmp: https://pytorch.org/tutorials/recipes/recipes/tuning_guide.html#intel-openmp-runtime-library-libiomp
     torch.set_num_threads(1)
 
 
