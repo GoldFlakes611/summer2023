@@ -110,7 +110,9 @@ class ImageSampler(Dataset):
                 # XXX: do not report every missing file before we fix the frame matching problem
                 count += 1
 
-        log.error(f"Found {count} missing images")
+        if count > 0:
+            log.error(f"Found {count} missing images")
+
         return samples
 
     def load_sample(self, dataset_paths):
