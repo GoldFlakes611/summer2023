@@ -65,3 +65,4 @@ models/
 Datasets/
 datasets/
 wandb/
+.vscode/
