@@ -11,7 +11,6 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3' #this hides tensorflow output spam on i
 import sys
 import tempfile
 from models import get_model
-import onnx
 
 from klogs import kLogger
 TAG = "CONVERT"
@@ -43,7 +42,7 @@ def torch_to_mobile(pytorch_model : str, output_mobile : str, model_name : str) 
     traced_script_module_optimized = optimize_for_mobile(traced_script_module)
     traced_script_module_optimized._save_for_lite_interpreter(output_mobile)
 
-def onnx_to_tflite(onnx_model : onnx.ModelProto, output_tflite : str) -> None:
+def onnx_to_tflite(onnx_model : 'onnx.ModelProto', output_tflite : str) -> None:
     '''
     Convert an onnx model to a tflite model
 
@@ -86,12 +85,12 @@ if __name__ == "__main__":
 
     #- ONNX to TFLite -
     argparser.add_argument('--onnx2tflite', action='store_true', help='Convert ONNX to TFLite')
-    argparser.add_argument('-i', '--input', type=str, help='Path to the input model')
-    argparser.add_argument('-o', '---output', type=str, help='Path to the output model')
+    argparser.add_argument('-i', '--input', type=str, help='Path to the input model', required=True)
+    argparser.add_argument('-o', '--output', type=str, help='Path to the output model', required=True)
 
     #- PyTorch to Pytorch Mobile -
     argparser.add_argument('--torch2mobile', action='store_true', help='Convert PyTorch to PyTorch Mobile')
-    argparser.add_argument('--model_name', type=str, help='Name of the model')
+    argparser.add_argument('--model_name', type=str, help='Name of the model', required="--torch2mobile" in sys.argv)
 
     args = argparser.parse_args()
     log.setLevel(args.level)
@@ -99,28 +98,18 @@ if __name__ == "__main__":
     if args.onnx2tflite:
         import tensorflow as tf
         from onnx_tf.backend import prepare
+        import onnx
         try:
-            if args.input and args.output:
-                onnx_to_tflite(onnx.load(args.input), args.output)
-            else:
-                log.error("Please provide input and output paths for ONNX and TFLite models")
-                sys.exit(1)
+            onnx_to_tflite(onnx.load(args.input), args.output)
         except ImportError:
             log.error("Please install onnx and tensorflow packages")
             sys.exit(1)
 
     if args.torch2mobile:
         import torch
-        import torchvision
         from torch.utils.mobile_optimizer import optimize_for_mobile
-        from torch import nn
         try:
-            if args.input and args.output and args.model_name:
-                torch_to_mobile(args.input, args.output, args.model_name)
-            else:
-                log.error("Please provide input and output paths for PyTorch and PyTorch Mobile models")
-                sys.exit(1)
+            torch_to_mobile(args.input, args.output, args.model_name)
         except ImportError:
             log.error("Please install torch and torchvision packages")
             sys.exit(1)
-
