@@ -207,12 +207,14 @@ class ImageSampler(Dataset):
         return *self.process(img, steering, throttle),
 
 
-def load_full_dataset(dataset_paths, train_test_split=0.8):
+def load_full_dataset(dataset_paths, train_test_split=0.8, use_cuda=True):
     '''
     Loads a full dataset from a list of paths
     Args:
         dataset_paths (list): list of paths to datasets
         train_test_split (float): percentage of data to be used for training
+        use_cuda (bool): whether to use cuda for image processing
+            See ImageSampler for more details
     Returns:
         tuple: trainset, testset
     '''
@@ -230,9 +232,9 @@ def load_full_dataset(dataset_paths, train_test_split=0.8):
             if (dataset_path / "test").is_dir():
                 test_datasets.append(dataset_path / "test")
 
-    trainset = ImageSampler(train_datasets)
+    trainset = ImageSampler(train_datasets, use_cuda=use_cuda)
     if test_datasets:
-        testset = ImageSampler(test_datasets)
+        testset = ImageSampler(test_datasets, use_cuda=use_cuda)
     else:
         train_size = int(len(trainset) * train_test_split)
         trainset, testset = random_split(trainset, [train_size, len(trainset) - train_size])
