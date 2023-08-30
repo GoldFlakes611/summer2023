@@ -57,12 +57,6 @@ class ImageSampler(Dataset):
         process(img, steering, throttle)
     '''
     def __init__(self, dataset_path, use_cuda=True):
-        self.datasets = []
-        self.size = 0
-        self.imgs = []
-        self.steering = []
-        self.throttle = []
-
         if use_cuda:
             self.device = device
         else:
