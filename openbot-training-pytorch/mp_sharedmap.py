@@ -27,6 +27,7 @@ def init_worker(i, output_type_, output_):
     output = to_array(output_type, output_)
     # XXX: https://github.com/pytorch/pytorch/issues/17199#issuecomment-493672631
     # XXX: or using intel openmp: https://pytorch.org/tutorials/recipes/recipes/tuning_guide.html#intel-openmp-runtime-library-libiomp
+    # XXX: intel openmp is not suggested because it has CPU affinity issue
     torch.set_num_threads(1)
 
 
