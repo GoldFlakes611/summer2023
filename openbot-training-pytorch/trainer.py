@@ -222,7 +222,7 @@ class Trainer:
                     }, os.path.join(self.save_dir, f"best_loss.pth"))
             if ang_metric > self.best_angle_metric:
                 self.best_angle_metric = ang_metric
-                if self.best_angle_metric > 0.6:
+                if self.best_angle_metric > 0.5:
                     torch.save({
                         "state": self.model.state_dict(),
                         "optim": self.optim.state_dict(),
