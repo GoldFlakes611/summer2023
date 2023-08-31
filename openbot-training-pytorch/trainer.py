@@ -7,6 +7,7 @@ Date Modified: 2023-08-28
 import os
 import pathlib
 from collections import OrderedDict
+import shutil
 
 import numpy as np
 import torch
@@ -47,6 +48,8 @@ class Trainer:
 
         self.save_dir = pathlib.Path(save_dir).joinpath(model.NAME+f"_{self.epochs}_{self.lr}_{self.bs}")
         self.save_dir.mkdir(parents=True, exist_ok=True)
+        self.ckpt_dir = self.save_dir.joinpath("ckpt")
+        self.ckpt_dir.mkdir(parents=True, exist_ok=True)
         
         self.train_log = []  # loss, angle, direction
         self.validation_log = []  # loss, angle, direction
@@ -238,6 +241,7 @@ class Trainer:
             # Reasonable to save every 10 epochs
             if self.i % 10 == 0:
                 self.save()
+                shutil.move(self.save_dir.joinpath("last.pth"), self.ckpt_dir.joinpath(f"ckpt_{self.i}.pth"))
 
             batch_bar.refresh()
             epochs_bar.update()
