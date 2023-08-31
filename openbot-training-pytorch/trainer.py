@@ -122,11 +122,10 @@ class Trainer:
         batches_train = len(sampler_train)
         batches_test = len(sampler_test)
 
-        epochs_bar = tqdm(total=epochs)
+        epochs_bar = tqdm(total=epochs, initial=self.i)
         epochs_bar.set_description("Epochs")
         batch_bar = tqdm(total=batches_train)
 
-        epochs_bar.update(self.i)
         epochs_bar.refresh()
         while self.i < epochs:
             #Training
