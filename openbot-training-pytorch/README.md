@@ -56,3 +56,9 @@ python prepare_dataset.py mydataset
 2. Train the model
 
 Refer to [Train.ipynb](Train.ipynb) for more details.
+
+## Known Issues
+
+- Training script using multiprocessing to process data, which is incompatible with GNU OpenMP. The way to work around this is to set `torch.set_num_threads(1)` for the worker process.
+
+- NumPy prefer intel openmp while PyTorch prefer GNU OpenMP.  To ensure GNU OpenMP is used, always import PyTorch before NumPy.
