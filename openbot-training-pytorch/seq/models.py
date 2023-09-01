@@ -1,15 +1,20 @@
 from copy import deepcopy
 
 import torch
-from models import get_model
+from models import get_model as get_model_single
 from torch import nn
 
 
 class ViViTV2(nn.Module):
-    def __init__(self, pretrained_vit, seq_len=10) -> None:
+    NAME = "vivit"
+    pretrained_vit = None
+
+    def __init__(self, seq_len=10) -> None:
         super().__init__()
-        vit = get_model("vit")()
-        vit.load_state_dict(torch.load(pretrained_vit)["state"])
+        vit = get_model_single("vit")()
+        if not self.pretrained_vit is None:
+            vit.load_state_dict(torch.load(self.pretrained_vit)["state"])
+
         vit = vit.model
 
         self.conv_proj = deepcopy(vit.conv_proj)
@@ -45,3 +50,20 @@ class ViViTV2(nn.Module):
         x = self.head(x)
 
         return x
+    
+
+models = {
+    "vivit": ViViTV2,
+}
+
+
+def get_model(name, config={}):
+    cls = models[name]
+
+    cls_instance = type(name, (cls,), {})
+
+    if name in config:
+        for k, v in  config.items():
+            setattr(cls_instance, k, v)
+
+    return cls_instance

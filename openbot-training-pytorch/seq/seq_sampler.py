@@ -36,7 +36,7 @@ class SeqSampler(Dataset):
         load_sample_openbot(dataset_path)
         process(img, steering, throttle)
     '''
-    def __init__(self, dataset_path, seq_len=5, stride=3, use_cuda=True):
+    def __init__(self, dataset_path, seq_len=10, stride=3, use_cuda=True):
         self.seq_len = seq_len
         self.stride = stride
         if use_cuda:
@@ -132,8 +132,8 @@ class SeqSampler(Dataset):
         seq_len = self.seq_len
 
         img = self.imgs[index:index + seq_len * stride:stride]
-        steering = self.steering[index:index + seq_len * stride:stride]
-        throttle = self.throttle[index:index + seq_len * stride:stride]
+        steering = self.steering[index + (seq_len - 1) * stride]
+        throttle = self.throttle[index + (seq_len - 1) * stride]
 
         return img, steering, throttle
 
